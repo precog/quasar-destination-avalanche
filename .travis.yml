@@ -1,0 +1,50 @@
+language: scala
+scala: 2.12.10
+jdk: openjdk8
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt
+    - $HOME/.coursier/cache
+
+env:
+  global:
+    - COURSIER_PROGRESS=0
+    - SBT=./sbt
+    # ENCRYPTION_PASSWORD
+    - secure: ...
+    # GITHUB_TOKEN
+    - secure: ...
+    # GITHUB_ACCESS_TOKEN
+    - secure: ...
+    # DISCORD_WEBHOOK_TOKENS
+    - secure: ...
+
+install:
+  - mkdir scripts
+  - $SBT transferCommonResources
+  - scripts/commonSetup
+
+script:
+    - set -e
+
+    - $SBT ++$TRAVIS_SCALA_VERSION test
+
+    - |-
+      if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
+        $SBT transferPublishAndTagResources;
+        TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/quasar-destination-avalanche';
+      fi
+
+after_success:
+  - scripts/checkAndAutoMerge
+  - scripts/discordTravisPost success https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
+
+after_failure:
+  - scripts/discordTravisPost failure https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
+
+branches:
+  only:
+    - master
+    - /^backport.*$/
