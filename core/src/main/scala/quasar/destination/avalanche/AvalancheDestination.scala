@@ -24,10 +24,13 @@ import java.util.UUID
 import quasar.api.push.RenderConfig
 import quasar.api.destination.{Destination, DestinationType, ResultSink}
 import quasar.api.resource._
-import quasar.blobstore.azure.AzurePutService
+import quasar.api.table.{ColumnType, TableColumn}
+import quasar.blobstore.azure.{AzureCredentials, AzurePutService}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem, Path}
 
+import cats._
+import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -37,16 +40,21 @@ import com.microsoft.azure.storage.blob.ContainerURL
 import doobie._
 import doobie.implicits._
 
+import fs2.Stream
+
 import org.slf4s.Logging
 
-import pathy.{Path => PPath}, PPath.FileName
+import pathy.Path.FileName
 
 import scalaz.NonEmptyList
+
+import shims._
 
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
   xa: Transactor[F],
   refContainerURL: Ref[F, ContainerURL],
-  refreshToken: F[Unit]) extends Destination[F] with Logging {
+  refreshToken: F[Unit],
+  config: AvalancheConfig) extends Destination[F] with Logging {
 
   def destinationType: DestinationType =
     AvalancheDestinationModule.destinationType
@@ -55,15 +63,20 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
   private val csvSink: ResultSink[F] = ResultSink.csv[F](RenderConfig.Csv()) {
     case (path, columns, bytes) => for {
-      _ <- ensureSingleSegment(path)
+      fileName <- Stream.eval(ensureSingleSegment(path))
+      freshName <- Stream.eval(upload(bytes))
+    } yield ()
+  }
+
+  private def upload(bytes: Stream[F, Byte]): F[String] =
+    for {
       freshNameSuffix <- Sync[F].delay(UUID.randomUUID().toString)
       freshName = s"reform-$freshNameSuffix"
       _ <- refreshToken
       containerURL <- refContainerURL.get
       put = AzurePutService.mk[F](containerURL)
       _ <- put((BlobPath(List(PathElem(freshName))), bytes))
-    } yield ()
-  }
+    } yield freshName
 
   private def ensureSingleSegment(r: ResourcePath): F[FileName] =
     r match {
@@ -71,9 +84,36 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def toBlobPath(path: ResourcePath): BlobPath =
-    BlobPath(toPath(path))
+  private def copyQuery(tableName: String, fileName: String): Fragment =
+    fr"COPY $tableName() VWLOAD FROM '${abfsPath(fileName)}'" ++
+    fr"WITH AZURE_CLIENT_ENDPOINT = 'https://login.microsoftonline.com/${config.azureCredentials.tenantId}'," ++
+    fr"AZURE_CLIENT_ID = '${config.azureCredentials.clientId}'," ++
+    fr"AZURE_CLIENT_SECRET = '${config.azureCredentials.clientSecret}'," ++
+    Fragment.const("IGNLAST")
 
-  private def toPath(path: ResourcePath): Path =
-    ResourcePath.resourceNamesIso.get(path).map(n => PathElem(n.value)).toList
+  private def abfsPath(file: String): String =
+    s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file"
+
+  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
+    fr"CREATE OR REPLACE TABLE" ++ Fragment.const(tableName) ++ Fragments.parentheses(
+      columns.intercalate(fr", ")) ++ fr"with nopartition"
+
+  private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
+    columnTypeToAvalanche(c.tpe).map(Fragment.const(c.name) ++ _)
+
+  private def columnTypeToAvalanche(ct: ColumnType.Scalar)
+      : ValidatedNel[ColumnType.Scalar, Fragment] =
+    ct match {
+      case ColumnType.Null => fr0"INTEGER1".validNel
+      case ColumnType.Boolean => fr0"BOOLEAN".validNel
+      case ColumnType.LocalTime => fr0"TIME[3]".validNel
+      case ColumnType.OffsetTime => fr0"TIME[3] WITH TIME ZONE".validNel
+      case ColumnType.LocalDate => fr0"ANSIDATE".validNel
+      case od @ ColumnType.OffsetDate => od.invalidNel
+      case ColumnType.LocalDateTime => fr0"TIMESTAMP[3]".validNel
+      case ColumnType.OffsetDateTime => fr0"TIMESTAMP[3] WITH TIME ZONE".validNel
+      case i @ ColumnType.Interval => i.invalidNel
+      case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
+      case ColumnType.String => fr0"NVARCHAR(512)".validNel
+    }
 }

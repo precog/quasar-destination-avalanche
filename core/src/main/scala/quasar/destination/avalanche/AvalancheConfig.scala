@@ -22,6 +22,7 @@ import scala._
 import java.net.{URI, URISyntaxException}
 
 import quasar.blobstore.azure.{
+  AccountName,
   AzureCredentials,
   ClientId,
   ClientSecret,
@@ -39,20 +40,23 @@ import cats.implicits._
 final case class ClusterPassword(value: String)
 
 final case class AvalancheConfig(
+  accountName: AccountName,
   containerName: ContainerName,
-  storageUrl: StorageUrl,
   connectionUri: URI,
   password: ClusterPassword,
   azureCredentials: AzureCredentials.ActiveDirectory)
-
 
 object AvalancheConfig {
   def toConfig(config: AvalancheConfig): Config =
     DefaultConfig(
       config.containerName,
       config.azureCredentials.some,
-      config.storageUrl,
+      storageUrl(config.accountName),
       None)
+
+  private def storageUrl(accountName: AccountName): StorageUrl =
+    StorageUrl(
+      s"https://${accountName.value}.blob.core.windows.net")
 
   private implicit val uriCodecJson: CodecJson[URI] =
     CodecJson(
@@ -77,19 +81,18 @@ object AvalancheConfig {
 
   implicit val avalancheConfigCodecJson: CodecJson[AvalancheConfig] =
     casecodec5[String, String, URI, String, AzureCredentials.ActiveDirectory, AvalancheConfig](
-      (containerName, storageUrl, uri, password, creds) =>
+      (accountName, containerName, uri, password, creds) =>
         AvalancheConfig(
+          AccountName(accountName),
           ContainerName(containerName),
-          StorageUrl(storageUrl),
           uri,
           ClusterPassword(password),
           creds),
       cfg =>
-        (cfg.containerName.value,
-          cfg.storageUrl.value,
+        (cfg.accountName.value,
+          cfg.containerName.value,
           cfg.connectionUri,
           cfg.password.value,
           cfg.azureCredentials).some)(
-      "containerName", "storageUrl", "connectionUri", "clusterPassword", "azureCredentials")
-
+      "accountName", "containerName", "connectionUri", "clusterPassword", "credentials")
 }
