@@ -25,11 +25,10 @@ import quasar.api.push.RenderConfig
 import quasar.api.destination.{Destination, DestinationType, ResultSink}
 import quasar.api.resource._
 import quasar.api.table.{ColumnType, TableColumn}
-import quasar.blobstore.azure.{AzureCredentials, AzurePutService}
+import quasar.blobstore.azure.{AzurePutService, Expires}
 import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.blobstore.paths.{BlobPath, PathElem, Path}
+import quasar.blobstore.paths.{BlobPath, PathElem}
 
-import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Ref
@@ -52,7 +51,7 @@ import shims._
 
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
   xa: Transactor[F],
-  refContainerURL: Ref[F, ContainerURL],
+  refContainerURL: Ref[F, Expires[ContainerURL]],
   refreshToken: F[Unit],
   config: AvalancheConfig) extends Destination[F] with Logging {
 
@@ -62,20 +61,56 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   def sinks: NonEmptyList[ResultSink[F]] = NonEmptyList(csvSink)
 
   private val csvSink: ResultSink[F] = ResultSink.csv[F](RenderConfig.Csv()) {
-    case (path, columns, bytes) => for {
-      fileName <- Stream.eval(ensureSingleSegment(path))
-      freshName <- Stream.eval(upload(bytes))
-    } yield ()
+    case (path, columns, bytes) =>
+      Stream.eval(for {
+        tableName <- ensureSingleSegment(path)
+        freshName <- upload(bytes)
+
+        cols0 <- columns.toNel.fold[F[NonEmptyList[TableColumn]]](
+          Sync[F].raiseError(new Exception("No columns specified")))(
+          _.asScalaz.pure[F])
+
+        cols <- cols0.traverse(mkColumn(_)).fold[F[NonEmptyList[Fragment]]](
+          errs => Sync[F].raiseError(
+            new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
+          _.pure[F])
+
+        createQuery = createTableQuery(tableName.value, cols).query[String]
+
+        _ <- debug(s"Table creation query:\n${createQuery.sql}")
+
+        createResponse <- createQuery.stream.transact(xa).compile.string
+
+        _ <- debug(s"Finished table creation with response:\n$createResponse")
+
+        loadQuery = copyQuery(tableName.value, freshName).query[String]
+
+        _ <- debug(s"Load query:\n${loadQuery.sql}")
+
+        loadResponse <- loadQuery.stream.transact(xa).compile.string
+
+        _ <- debug(s"Finished table copy with response:\n$loadResponse")
+
+      } yield ())
   }
 
   private def upload(bytes: Stream[F, Byte]): F[String] =
     for {
       freshNameSuffix <- Sync[F].delay(UUID.randomUUID().toString)
       freshName = s"reform-$freshNameSuffix"
+
       _ <- refreshToken
+
       containerURL <- refContainerURL.get
-      put = AzurePutService.mk[F](containerURL)
+
+      put = AzurePutService.mk[F](containerURL.value)
+
+      _ <- debug(s"Starting upload of $freshName")
+
       _ <- put((BlobPath(List(PathElem(freshName))), bytes))
+
+      _ <- debug(s"Finished upload of $freshName")
+
     } yield freshName
 
   private def ensureSingleSegment(r: ResourcePath): F[FileName] =
@@ -98,6 +133,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     fr"CREATE OR REPLACE TABLE" ++ Fragment.const(tableName) ++ Fragments.parentheses(
       columns.intercalate(fr", ")) ++ fr"with nopartition"
 
+  private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
+    errs.map(_.show).intercalate(", ")
+
   private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
     columnTypeToAvalanche(c.tpe).map(Fragment.const(c.name) ++ _)
 
@@ -116,4 +154,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
       case ColumnType.String => fr0"NVARCHAR(512)".validNel
     }
+
+  private def debug(msg: String): F[Unit] =
+    Sync[F].delay(log.debug(msg))
 }

@@ -37,6 +37,7 @@ import quasar.concurrent.NamedDaemonThreadFactory
 
 import argonaut._, Argonaut._
 
+import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
@@ -90,7 +91,8 @@ object AvalancheDestinationModule extends DestinationModule {
       (refContainerURL, refresh) <- EitherT.right[InitializationError[Json]](
         Resource.liftF(Azure.refContainerUrl(AvalancheConfig.toConfig(cfg))))
 
-      dest: Destination[F] = ???
+      dest: Destination[F] =
+        new AvalancheDestination[F](transactor, refContainerURL, refresh, cfg)
 
     } yield dest).value
 
