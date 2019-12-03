@@ -83,11 +83,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
         _ <- debug(s"Finished table creation")
 
-        loadQuery = copyQuery(tableName.value, freshName).query[Unit]
+        loadQuery = copyQuery(tableName.value, freshName).update
 
         _ <- debug(s"Load query:\n${loadQuery.sql}")
 
-        _ <- loadQuery.stream.transact(xa).compile.drain
+        _ <- loadQuery.run.transact(xa)
 
         _ <- debug(s"Finished table copy")
 
@@ -120,10 +120,12 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     }
 
   private def copyQuery(tableName: String, fileName: String): Fragment =
-    fr"COPY" ++ Fragment.const(tableName) ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
-    fr"WITH AZURE_CLIENT_ENDPOINT = " ++ Fragment.const(s"'https://login.microsoftonline.com/${config.azureCredentials.tenantId.value}/oauth2/token',") ++
-    fr"AZURE_CLIENT_ID = " ++ Fragment.const(s"'${config.azureCredentials.clientId.value}'") ++ fr0"," ++
-    fr"AZURE_CLIENT_SECRET = " ++ Fragment.const(s"'${config.azureCredentials.clientSecret.value}'")
+    fr"COPY" ++ Fragment.const0(tableName) ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
+    fr"WITH AZURE_CLIENT_ENDPOINT =" ++ Fragment.const(s"'https://login.microsoftonline.com/${config.azureCredentials.tenantId.value}/oauth2/token',") ++
+    fr"AZURE_CLIENT_ID =" ++ Fragment.const(s"'${config.azureCredentials.clientId.value}',") ++
+    fr"AZURE_CLIENT_SECRET =" ++ Fragment.const(s"'${config.azureCredentials.clientSecret.value}',") ++
+    fr"FDELIM=','," ++
+    fr"HEADER"
 
   private def abfsPath(file: String): String =
     s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file"
