@@ -75,21 +75,21 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
             new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
           _.pure[F])
 
-        createQuery = createTableQuery(tableName.value, cols).query[String]
+        createQuery = createTableQuery(tableName.value, cols).update
 
         _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
-        createResponse <- createQuery.stream.transact(xa).compile.string
+        _ <- createQuery.run.transact(xa)
 
-        _ <- debug(s"Finished table creation with response:\n$createResponse")
+        _ <- debug(s"Finished table creation")
 
-        loadQuery = copyQuery(tableName.value, freshName).query[String]
+        loadQuery = copyQuery(tableName.value, freshName).query[Unit]
 
         _ <- debug(s"Load query:\n${loadQuery.sql}")
 
-        loadResponse <- loadQuery.stream.transact(xa).compile.string
+        _ <- loadQuery.stream.transact(xa).compile.drain
 
-        _ <- debug(s"Finished table copy with response:\n$loadResponse")
+        _ <- debug(s"Finished table copy")
 
       } yield ())
   }
@@ -120,36 +120,35 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     }
 
   private def copyQuery(tableName: String, fileName: String): Fragment =
-    fr"COPY $tableName() VWLOAD FROM '${abfsPath(fileName)}'" ++
-    fr"WITH AZURE_CLIENT_ENDPOINT = 'https://login.microsoftonline.com/${config.azureCredentials.tenantId}'," ++
-    fr"AZURE_CLIENT_ID = '${config.azureCredentials.clientId}'," ++
-    fr"AZURE_CLIENT_SECRET = '${config.azureCredentials.clientSecret}'," ++
-    Fragment.const("IGNLAST")
+    fr"COPY" ++ Fragment.const(tableName) ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
+    fr"WITH AZURE_CLIENT_ENDPOINT = " ++ Fragment.const(s"'https://login.microsoftonline.com/${config.azureCredentials.tenantId.value}/oauth2/token',") ++
+    fr"AZURE_CLIENT_ID = " ++ Fragment.const(s"'${config.azureCredentials.clientId.value}'") ++ fr0"," ++
+    fr"AZURE_CLIENT_SECRET = " ++ Fragment.const(s"'${config.azureCredentials.clientSecret.value}'")
 
   private def abfsPath(file: String): String =
     s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file"
 
   private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
-    fr"CREATE OR REPLACE TABLE" ++ Fragment.const(tableName) ++ Fragments.parentheses(
-      columns.intercalate(fr", ")) ++ fr"with nopartition"
+    fr"CREATE TABLE" ++ Fragment.const(tableName) ++
+    Fragments.parentheses(columns.intercalate(fr", ")) ++ fr"with nopartition"
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
     errs.map(_.show).intercalate(", ")
 
   private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
-    columnTypeToAvalanche(c.tpe).map(Fragment.const(c.name) ++ _)
+    columnTypeToAvalanche(c.tpe).map(Fragment.const(s""""${c.name}"""") ++ _)
 
   private def columnTypeToAvalanche(ct: ColumnType.Scalar)
       : ValidatedNel[ColumnType.Scalar, Fragment] =
     ct match {
       case ColumnType.Null => fr0"INTEGER1".validNel
       case ColumnType.Boolean => fr0"BOOLEAN".validNel
-      case ColumnType.LocalTime => fr0"TIME[3]".validNel
-      case ColumnType.OffsetTime => fr0"TIME[3] WITH TIME ZONE".validNel
+      case ColumnType.LocalTime => fr0"TIME(3)".validNel
+      case ColumnType.OffsetTime => fr0"TIME(3) WITH TIME ZONE".validNel
       case ColumnType.LocalDate => fr0"ANSIDATE".validNel
       case od @ ColumnType.OffsetDate => od.invalidNel
-      case ColumnType.LocalDateTime => fr0"TIMESTAMP[3]".validNel
-      case ColumnType.OffsetDateTime => fr0"TIMESTAMP[3] WITH TIME ZONE".validNel
+      case ColumnType.LocalDateTime => fr0"TIMESTAMP(3)".validNel
+      case ColumnType.OffsetDateTime => fr0"TIMESTAMP(3) WITH TIME ZONE".validNel
       case i @ ColumnType.Interval => i.invalidNel
       case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
       case ColumnType.String => fr0"NVARCHAR(512)".validNel
