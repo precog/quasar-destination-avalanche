@@ -83,10 +83,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
         _ <- debug(s"Finished table creation")
 
-        loadQuery = copyQuery(tableName.value, freshName).updateWithLogHandler(LogHandler.jdkLogHandler)
+        loadQuery = copyQuery(tableName.value, freshName).update
 
         _ <- debug(s"Load query:\n${loadQuery.sql}")
 
+        // use JDBC directly, otherwise Avalanche refuses to load
         connection = xa.connect(xa.kernel)
 
         count <- connection.use(cn => for {
