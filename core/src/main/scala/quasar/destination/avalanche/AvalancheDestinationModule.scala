@@ -37,15 +37,11 @@ import quasar.concurrent.NamedDaemonThreadFactory
 
 import argonaut._, Argonaut._
 
-import cats._
 import cats.data._
 import cats.effect._
-import cats.implicits._
 
 import eu.timepit.refined.auto._
 
-import doobie._
-import doobie.implicits._
 import doobie.hikari.HikariTransactor
 
 object AvalancheDestinationModule extends DestinationModule {

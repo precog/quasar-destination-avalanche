@@ -25,7 +25,7 @@ import quasar.api.push.RenderConfig
 import quasar.api.destination.{Destination, DestinationType, ResultSink}
 import quasar.api.resource._
 import quasar.api.table.{ColumnType, TableColumn}
-import quasar.blobstore.azure.{AzurePutService, Expires}
+import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
@@ -62,49 +62,67 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
   private val csvSink: ResultSink[F] = ResultSink.csv[F](RenderConfig.Csv()) {
     case (path, columns, bytes) =>
-      Stream.eval(for {
-        tableName <- ensureSingleSegment(path)
-        freshName <- upload(bytes)
+      for {
+        tableName <- Stream.eval(ensureSingleSegment(path))
 
-        cols0 <- columns.toNel.fold[F[NonEmptyList[TableColumn]]](
-          Sync[F].raiseError(new Exception("No columns specified")))(
-          _.asScalaz.pure[F])
+        freshName <- Stream.eval(upload(bytes))
 
-        cols <- cols0.traverse(mkColumn(_)).fold[F[NonEmptyList[Fragment]]](
-          errs => Sync[F].raiseError(
-            new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
-          _.pure[F])
+        _ <- Stream.eval(copy(tableName, freshName, columns)).onFinalize(deleteBlob(freshName))
 
-        createQuery = createTableQuery(tableName.value, cols).update
-
-        _ <- debug(s"Table creation query:\n${createQuery.sql}")
-
-        _ <- createQuery.run.transact(xa)
-
-        _ <- debug(s"Finished table creation")
-
-        loadQuery = copyQuery(tableName.value, freshName).update
-
-        _ <- debug(s"Load query:\n${loadQuery.sql}")
-
-        // use JDBC directly, otherwise Avalanche refuses to load
-        connection = xa.connect(xa.kernel)
-
-        count <- connection.use(cn => for {
-          _ <- Sync[F].delay(cn.setAutoCommit(false))
-          statement <- Sync[F].delay(cn.createStatement())
-          _ <- Sync[F].delay(statement.execute(loadQuery.sql))
-          count = statement.getUpdateCount
-          autoCommit <- Sync[F].delay(cn.commit())
-          _ <- Sync[F].delay(statement.close())
-        } yield count)
-
-        _ <- debug(s"Load result count: $count")
-
-        _ <- debug(s"Finished table copy")
-
-      } yield ())
+      } yield ()
   }
+
+  private def deleteBlob(freshName: String): F[Unit] =
+    for {
+      _ <- refreshToken
+
+      containerURL <- refContainerURL.get
+
+      deleteService = AzureDeleteService.mk[F](containerURL.value)
+
+      _ <- deleteService(BlobPath(List(PathElem(freshName))))
+    } yield ()
+
+  private def copy(tableName: FileName, freshName: String, columns: List[TableColumn])
+      : F[Unit] =
+    for {
+      cols0 <- columns.toNel.fold[F[NonEmptyList[TableColumn]]](
+        Sync[F].raiseError(new Exception("No columns specified")))(
+        _.asScalaz.pure[F])
+
+      cols <- cols0.traverse(mkColumn(_)).fold[F[NonEmptyList[Fragment]]](
+        errs => Sync[F].raiseError(
+          new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
+        _.pure[F])
+
+      createQuery = createTableQuery(tableName.value, cols).update
+
+      _ <- debug(s"Table creation query:\n${createQuery.sql}")
+
+      _ <- createQuery.run.transact(xa)
+
+      _ <- debug(s"Finished table creation")
+
+      loadQuery = copyQuery(tableName.value, freshName).update
+
+      _ <- debug(s"Load query:\n${loadQuery.sql}")
+
+      // use JDBC directly, otherwise Avalanche refuses to load
+      connection = xa.connect(xa.kernel)
+
+      count <- connection.use(cn => for {
+        _ <- Sync[F].delay(cn.setAutoCommit(false))
+        statement <- Sync[F].delay(cn.createStatement())
+        _ <- Sync[F].delay(statement.execute(loadQuery.sql))
+        count = statement.getUpdateCount
+        autoCommit <- Sync[F].delay(cn.commit())
+        _ <- Sync[F].delay(statement.close())
+      } yield count)
+
+      _ <- debug(s"Load result count: $count")
+
+      _ <- debug(s"Finished table copy")
+    } yield ()
 
   private def upload(bytes: Stream[F, Byte]): F[String] =
     for {
