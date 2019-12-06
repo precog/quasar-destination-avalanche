@@ -19,6 +19,7 @@ package quasar.destination.avalanche
 import scala.Predef._
 import scala._
 
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 import quasar.api.push.RenderConfig
@@ -55,12 +56,19 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   refreshToken: F[Unit],
   config: AvalancheConfig) extends Destination[F] with Logging {
 
+  private val ingresRenderConfig = RenderConfig.Csv(
+    offsetDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS xxx"),
+    offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
+    localDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS"),
+    localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd"),
+    localTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+
   def destinationType: DestinationType =
     AvalancheDestinationModule.destinationType
 
   def sinks: NonEmptyList[ResultSink[F]] = NonEmptyList(csvSink)
 
-  private val csvSink: ResultSink[F] = ResultSink.csv[F](RenderConfig.Csv()) {
+  private val csvSink: ResultSink[F] = ResultSink.csv[F](ingresRenderConfig) {
     case (path, columns, bytes) =>
       for {
         tableName <- Stream.eval(ensureSingleSegment(path))
