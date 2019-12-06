@@ -115,16 +115,24 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- debug(s"Load query:\n${loadQuery.sql}")
 
-      // use JDBC directly, otherwise Avalanche refuses to load
+      // use JDBC directly and turn-off autocommit.
+      // Otherwise Avalanche refuses to load
       connection = xa.connect(xa.kernel)
 
       count <- connection.use(cn => for {
+
         _ <- Sync[F].delay(cn.setAutoCommit(false))
+
         statement <- Sync[F].delay(cn.createStatement())
+
         _ <- Sync[F].delay(statement.execute(loadQuery.sql))
+
         count = statement.getUpdateCount
-        autoCommit <- Sync[F].delay(cn.commit())
+
+        _ <- Sync[F].delay(cn.commit())
+
         _ <- Sync[F].delay(statement.close())
+
       } yield count)
 
       _ <- debug(s"Load result count: $count")
