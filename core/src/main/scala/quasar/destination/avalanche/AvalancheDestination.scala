@@ -166,18 +166,19 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     }
 
   private def copyQuery(tableName: String, fileName: String): Fragment =
-    fr"COPY" ++ Fragment.const0(tableName) ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
+    fr"COPY" ++ Fragment.const0(s""""$tableName"""") ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
     fr"WITH AZURE_CLIENT_ENDPOINT =" ++ Fragment.const(s"'https://login.microsoftonline.com/${config.azureCredentials.tenantId.value}/oauth2/token',") ++
     fr"AZURE_CLIENT_ID =" ++ Fragment.const(s"'${config.azureCredentials.clientId.value}',") ++
     fr"AZURE_CLIENT_SECRET =" ++ Fragment.const(s"'${config.azureCredentials.clientSecret.value}',") ++
     fr"FDELIM=','," ++
+    fr"""QUOTE='"',""" ++
     fr"HEADER"
 
   private def abfsPath(file: String): String =
     s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file"
 
   private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
-    fr"CREATE TABLE" ++ Fragment.const(tableName) ++
+    fr"CREATE TABLE" ++ Fragment.const(s""""$tableName"""") ++
     Fragments.parentheses(columns.intercalate(fr", ")) ++ fr"with nopartition"
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
