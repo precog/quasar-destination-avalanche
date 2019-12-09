@@ -26,7 +26,7 @@ import quasar.api.push.RenderConfig
 import quasar.api.destination.{Destination, DestinationType, ResultSink}
 import quasar.api.resource._
 import quasar.api.table.{ColumnType, TableColumn}
-import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires}
+import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
@@ -57,6 +57,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   config: AvalancheConfig) extends Destination[F] with Logging {
 
   private val ingresRenderConfig = RenderConfig.Csv(
+    includeHeader = false,
     offsetDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS xxx"),
     offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
     localDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS"),
@@ -103,11 +104,15 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
           new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
         _.pure[F])
 
+      dropQuery = dropTableQuery(tableName.value).update
+
       createQuery = createTableQuery(tableName.value, cols).update
+
+      _ <- debug(s"Drop table query:\n${dropQuery.sql}")
 
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
-      _ <- createQuery.run.transact(xa)
+      _ <- (dropQuery.run *> createQuery.run).transact(xa)
 
       _ <- debug(s"Finished table creation")
 
@@ -115,7 +120,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- debug(s"Load query:\n${loadQuery.sql}")
 
-      // use JDBC directly and turn-off autocommit.
+      // use JDBC directly and turn-off autocommit to run the COPY command.
       // Otherwise Avalanche refuses to load
       connection = xa.connect(xa.kernel)
 
@@ -166,20 +171,32 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     }
 
   private def copyQuery(tableName: String, fileName: String): Fragment =
-    fr"COPY" ++ Fragment.const0(s""""$tableName"""") ++ fr0"() VWLOAD FROM " ++ Fragment.const(s"'${abfsPath(fileName)}'") ++
-    fr"WITH AZURE_CLIENT_ENDPOINT =" ++ Fragment.const(s"'https://login.microsoftonline.com/${config.azureCredentials.tenantId.value}/oauth2/token',") ++
-    fr"AZURE_CLIENT_ID =" ++ Fragment.const(s"'${config.azureCredentials.clientId.value}',") ++
-    fr"AZURE_CLIENT_SECRET =" ++ Fragment.const(s"'${config.azureCredentials.clientSecret.value}',") ++
-    fr"FDELIM=','," ++
-    fr"""QUOTE='"',""" ++
-    fr"HEADER"
+    fr"COPY" ++ Fragment.const0(s""""$tableName"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
+      fr"WITH" ++ pairs(
+      fr"AZURE_CLIENT_ENDPOINT" -> authEndpoint(config.azureCredentials.tenantId),
+      fr"AZURE_CLIENT_ID" -> Fragment.const(s"'${config.azureCredentials.clientId.value}'"),
+      fr"AZURE_CLIENT_SECRET" -> Fragment.const(s"'${config.azureCredentials.clientSecret.value}'"),
+      fr"FDELIM" -> fr"','",
+      fr"QUOTE" -> fr"""'"'""")
 
-  private def abfsPath(file: String): String =
-    s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file"
+  private def authEndpoint(tid: TenantId): Fragment =
+    Fragment.const(s"'https://login.microsoftonline.com/${tid.value}/oauth2/token'")
+
+  private def pairs(ps: (Fragment, Fragment)*): Fragment =
+    (ps map {
+      case (lhs, rhs) => lhs ++ fr"=" ++ rhs
+    }).toList.intercalate(fr",")
+
+  private def abfsPath(file: String): Fragment =
+    Fragment.const(
+      s"'abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file'")
 
   private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
     fr"CREATE TABLE" ++ Fragment.const(s""""$tableName"""") ++
-    Fragments.parentheses(columns.intercalate(fr", ")) ++ fr"with nopartition"
+    Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
+
+  private def dropTableQuery(tableName: String): Fragment =
+    fr"DROP TABLE IF EXISTS" ++ Fragment.const(tableName)
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
     errs.map(_.show).intercalate(", ")
