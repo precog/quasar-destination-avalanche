@@ -198,6 +198,8 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case od @ ColumnType.OffsetDate => od.invalidNel
       case ColumnType.LocalDateTime => fr0"TIMESTAMP(3)".validNel
       case ColumnType.OffsetDateTime => fr0"TIMESTAMP(3) WITH TIME ZONE".validNel
+      // Avalanche supports intervals, but not ISO 8601 intervals, which is what
+      // Quasar produces
       case i @ ColumnType.Interval => i.invalidNel
       case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
       case ColumnType.String => fr0"NVARCHAR(512)".validNel

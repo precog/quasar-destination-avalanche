@@ -19,6 +19,7 @@ package quasar.destination.avalanche
 import scala.Predef._
 import scala._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.util.{Either, Random}
 
 import java.util.concurrent.Executors
@@ -37,8 +38,8 @@ import quasar.concurrent.NamedDaemonThreadFactory
 
 import argonaut._, Argonaut._
 
-import cats.data._
-import cats.effect._
+import cats.data.EitherT
+import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 
 import eu.timepit.refined.auto._
 
@@ -46,6 +47,8 @@ import doobie.hikari.HikariTransactor
 
 object AvalancheDestinationModule extends DestinationModule {
   val IngresDriverFqcn = "com.ingres.jdbc.IngresDriver"
+  // Avalanche closes the connection after 4 minutes so we set a connection lifetime of 3 minutes.
+  val MaxLifetime = 3.minutes
   val Redacted = "<REDACTED>"
   val PoolSize: Int = 10
 
@@ -83,6 +86,9 @@ object AvalancheDestinationModule extends DestinationModule {
           cfg.password.value,
           connectPool,
           transactPool))
+
+      _ <- EitherT.right(Resource.liftF(
+          transactor.configure(ds => Sync[F].delay(ds.setMaxLifetime(MaxLifetime.toMillis)))))
 
       (refContainerURL, refresh) <- EitherT.right[InitializationError[Json]](
         Resource.liftF(Azure.refContainerUrl(AvalancheConfig.toConfig(cfg))))
