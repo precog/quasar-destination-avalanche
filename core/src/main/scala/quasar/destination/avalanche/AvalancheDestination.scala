@@ -39,6 +39,7 @@ import com.microsoft.azure.storage.blob.ContainerURL
 
 import doobie._
 import doobie.implicits._
+import doobie.free.connection.raw
 
 import fs2.Stream
 
@@ -56,7 +57,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   refreshToken: F[Unit],
   config: AvalancheConfig) extends Destination[F] with Logging {
 
-  private val ingresRenderConfig = RenderConfig.Csv(
+  private val IngresRenderConfig = RenderConfig.Csv(
     includeHeader = false,
     offsetDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS xxx"),
     offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
@@ -69,7 +70,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
   def sinks: NonEmptyList[ResultSink[F]] = NonEmptyList(csvSink)
 
-  private val csvSink: ResultSink[F] = ResultSink.csv[F](ingresRenderConfig) {
+  private val csvSink: ResultSink[F] = ResultSink.csv[F](IngresRenderConfig) {
     case (path, columns, bytes) =>
       for {
         tableName <- Stream.eval(ensureSingleSegment(path))
@@ -116,33 +117,28 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- debug(s"Load query:\n${loadQuery.sql}")
 
-      _ <- (dropQuery.run *> createQuery.run).transact(xa)
+      // drop down to raw JDBC to execute the load query.
+      // Otherwise Avalanche refuses to load
+      load = raw { cn =>
+        val statement = cn.createStatement()
+
+        statement.execute(loadQuery.sql)
+
+        val count = statement.getUpdateCount
+
+        statement.close
+
+        count
+      }
+
+      count <- (dropQuery.run *> createQuery.run *> load).transact(xa)
 
       _ <- debug(s"Finished load")
-
-      // use JDBC directly and turn-off autocommit to run the COPY command.
-      // Otherwise Avalanche refuses to load
-      connection = xa.connect(xa.kernel)
-
-      load = connection.use(cn => for {
-
-        _ <- Sync[F].delay(cn.setAutoCommit(false))
-
-        statement <- Sync[F].delay(cn.createStatement())
-
-        _ <- Sync[F].delay(statement.execute(loadQuery.sql))
-
-        count = statement.getUpdateCount
-
-        _ <- Sync[F].delay(cn.commit())
-
-        _ <- Sync[F].delay(statement.close())
-
-      } yield count)
 
       _ <- debug(s"Load result count: $count")
 
       _ <- debug(s"Finished table copy")
+
     } yield ()
 
   private def upload(bytes: Stream[F, Byte]): F[String] =
