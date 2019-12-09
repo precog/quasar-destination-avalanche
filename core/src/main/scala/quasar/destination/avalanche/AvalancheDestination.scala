@@ -108,23 +108,23 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       createQuery = createTableQuery(tableName.value, cols).update
 
+      loadQuery = copyQuery(tableName.value, freshName).update
+
       _ <- debug(s"Drop table query:\n${dropQuery.sql}")
 
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
+      _ <- debug(s"Load query:\n${loadQuery.sql}")
+
       _ <- (dropQuery.run *> createQuery.run).transact(xa)
 
-      _ <- debug(s"Finished table creation")
-
-      loadQuery = copyQuery(tableName.value, freshName).update
-
-      _ <- debug(s"Load query:\n${loadQuery.sql}")
+      _ <- debug(s"Finished load")
 
       // use JDBC directly and turn-off autocommit to run the COPY command.
       // Otherwise Avalanche refuses to load
       connection = xa.connect(xa.kernel)
 
-      count <- connection.use(cn => for {
+      load = connection.use(cn => for {
 
         _ <- Sync[F].delay(cn.setAutoCommit(false))
 
