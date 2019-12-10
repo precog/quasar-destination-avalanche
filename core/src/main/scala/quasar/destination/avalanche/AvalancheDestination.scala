@@ -31,8 +31,8 @@ import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, Ten
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
-import cats.data._
-import cats.effect._
+import cats.data.ValidatedNel
+import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.effect.concurrent.Ref
 import cats.implicits._
 
