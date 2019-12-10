@@ -6,6 +6,7 @@ scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/slamdata/quasar-destination-avalanche"),
   "scm:git@github.com:slamdata/quasar-destination-avalanche.git"))
 
+
 lazy val QuasarVersion = IO.read(file("./quasar-version")).trim
 val DoobieVersion = "0.7.0"
 val AsyncBlobstoreVersion = "1.1.0"
@@ -26,6 +27,11 @@ lazy val core = project
   .settings(
     performMavenCentralSync := false,
     publishAsOSSProject := true,
+    assemblyExcludedJars in assembly := {
+      val cp = (fullClasspath in assembly).value
+
+      cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
+    },
     quasarPluginName := "avalanche",
     quasarPluginQuasarVersion := QuasarVersion,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.AvalancheDestinationModule$"),
@@ -35,6 +41,8 @@ lazy val core = project
       "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
       "com.slamdata" %% "async-blobstore-azure" % AsyncBlobstoreVersion,
       "com.slamdata" %% "async-blobstore-core" % AsyncBlobstoreVersion),
+    excludeDependencies += "org.typelevel" % "scala-library",
     libraryDependencies ++= Seq(
-      "org.specs2" %% "specs2-core" % "4.7.0" % Test))
+      "org.specs2" %% "specs2-core" % "4.7.0" % Test),
+    packageBin in Compile := (assembly in Compile).value)
   .enablePlugins(AutomateHeaderPlugin, QuasarPlugin)
