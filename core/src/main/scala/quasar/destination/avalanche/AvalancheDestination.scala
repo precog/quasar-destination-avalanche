@@ -18,6 +18,7 @@ package quasar.destination.avalanche
 
 import scala.Predef._
 import scala._
+import scala.util.matching.Regex
 
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -82,6 +83,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       } yield ()
   }
 
+  private def removeQuotes(str: String): String =
+    str.replace("\"", "").replace("'", "")
+
   private def deleteBlob(freshName: String): F[Unit] =
     for {
       _ <- refreshToken
@@ -111,11 +115,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       loadQuery = copyQuery(tableName.value, freshName).update
 
-      _ <- debug(s"Drop table query:\n${dropQuery.sql}")
-
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
-      _ <- debug(s"Load query:\n${loadQuery.sql}")
+      _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
+
+      _ <- debug(s"Drop table query:\n${dropQuery.sql}")
 
       // drop down to raw JDBC to execute the load query.
       // Otherwise Avalanche refuses to load
@@ -166,33 +170,52 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def copyQuery(tableName: String, fileName: String): Fragment =
-    fr"COPY" ++ Fragment.const0(s""""$tableName"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
+  private def copyQuery(tableName: String, fileName: String): Fragment = {
+    val table = removeQuotes(tableName)
+    val clientId = removeQuotes(config.azureCredentials.clientId.value)
+    val clientSecret = removeQuotes(config.azureCredentials.clientSecret.value)
+
+    fr"COPY" ++ Fragment.const0(s""""$table"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
       fr"WITH" ++ pairs(
       fr"AZURE_CLIENT_ENDPOINT" -> authEndpoint(config.azureCredentials.tenantId),
-      fr"AZURE_CLIENT_ID" -> Fragment.const(s"'${config.azureCredentials.clientId.value}'"),
-      fr"AZURE_CLIENT_SECRET" -> Fragment.const(s"'${config.azureCredentials.clientSecret.value}'"),
+      fr"AZURE_CLIENT_ID" -> Fragment.const(s"'$clientId'"),
+      fr"AZURE_CLIENT_SECRET" -> Fragment.const(s"'$clientSecret'"),
       fr"FDELIM" -> fr"','",
       fr"QUOTE" -> fr"""'"'""")
+  }
 
-  private def authEndpoint(tid: TenantId): Fragment =
-    Fragment.const(s"'https://login.microsoftonline.com/${tid.value}/oauth2/token'")
+  private def authEndpoint(tid: TenantId): Fragment = {
+    val tenant = removeQuotes(tid.value)
+
+    Fragment.const(s"'https://login.microsoftonline.com/$tenant/oauth2/token'")
+  }
 
   private def pairs(ps: (Fragment, Fragment)*): Fragment =
     (ps map {
       case (lhs, rhs) => lhs ++ fr"=" ++ rhs
     }).toList.intercalate(fr",")
 
-  private def abfsPath(file: String): Fragment =
+  private def abfsPath(file: String): Fragment = {
+    val container = removeQuotes(config.containerName.value)
+    val account = removeQuotes(config.accountName.value)
+    val fileName = removeQuotes(file)
+
     Fragment.const(
-      s"'abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/$file'")
+      s"'abfs://$container@$account.dfs.core.windows.net/$fileName'")
+  }
 
-  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
-    fr"CREATE TABLE" ++ Fragment.const(s""""$tableName"""") ++
-    Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
+  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment = {
+    val table = removeQuotes(tableName)
 
-  private def dropTableQuery(tableName: String): Fragment =
-    fr"DROP TABLE IF EXISTS" ++ Fragment.const(tableName)
+    fr"CREATE TABLE" ++ Fragment.const(s""""$table"""") ++
+      Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
+  }
+
+  private def dropTableQuery(tableName: String): Fragment = {
+    val table = removeQuotes(tableName)
+
+    fr"DROP TABLE IF EXISTS" ++ Fragment.const(s""""$table"""")
+  }
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
     errs.map(_.show).intercalate(", ")
@@ -220,4 +243,10 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
   private def debug(msg: String): F[Unit] =
     Sync[F].delay(log.debug(msg))
+
+  private def debugRedacted(msg: String): F[Unit] = {
+    // remove everything within single quotes, to avoid leaking credentials
+    Sync[F].delay(
+      log.debug((new Regex("""'[^' ]{2,}'""")).replaceAllIn(msg, "<REDACTED>")))
+  }
 }
