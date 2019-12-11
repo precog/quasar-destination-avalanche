@@ -26,7 +26,7 @@ import java.util.UUID
 import quasar.api.push.RenderConfig
 import quasar.api.destination.{Destination, DestinationType, ResultSink}
 import quasar.api.resource._
-import quasar.api.table.{ColumnType, TableColumn}
+import quasar.api.table.{ColumnType, TableColumn, TableName}
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
@@ -40,7 +40,7 @@ import com.microsoft.azure.storage.blob.ContainerURL
 
 import doobie._
 import doobie.implicits._
-import doobie.free.connection.raw
+import doobie.free.connection.createStatement
 
 import fs2.Stream
 
@@ -74,7 +74,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   private val csvSink: ResultSink[F] = ResultSink.csv[F](IngresRenderConfig) {
     case (path, columns, bytes) =>
       for {
-        tableName <- Stream.eval(ensureSingleSegment(path))
+        tableName <- Stream.eval(ensureValidTableName(path))
 
         freshName <- Stream.eval(upload(bytes))
 
@@ -83,10 +83,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       } yield ()
   }
 
-  private def removeQuotes(str: String): String =
-    str.replace("\"", "").replace("'", "")
-
-  private def deleteBlob(freshName: String): F[Unit] =
+  private def deleteBlob(freshName: FileName): F[Unit] =
     for {
       _ <- refreshToken
 
@@ -94,10 +91,10 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       deleteService = AzureDeleteService.mk[F](containerURL.value)
 
-      _ <- deleteService(BlobPath(List(PathElem(freshName))))
+      _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
     } yield ()
 
-  private def copy(tableName: FileName, freshName: String, columns: List[TableColumn])
+  private def copy(tableName: TableName, freshName: FileName, columns: List[TableColumn])
       : F[Unit] =
     for {
       cols0 <- columns.toNel.fold[F[NonEmptyList[TableColumn]]](
@@ -109,11 +106,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
           new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
         _.pure[F])
 
-      dropQuery = dropTableQuery(tableName.value).update
+      dropQuery = dropTableQuery(tableName).update
 
-      createQuery = createTableQuery(tableName.value, cols).update
+      createQuery = createTableQuery(tableName, cols).update
 
-      loadQuery = copyQuery(tableName.value, freshName).update
+      loadQuery = copyQuery(tableName, freshName).update
 
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
@@ -121,19 +118,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- debug(s"Drop table query:\n${dropQuery.sql}")
 
-      // drop down to raw JDBC to execute the load query.
-      // Otherwise Avalanche refuses to load
-      load = raw { cn =>
-        val statement = cn.createStatement()
-
-        statement.execute(loadQuery.sql)
-
-        val count = statement.getUpdateCount
-
-        statement.close
-
-        count
-      }
+      load = Sync[ConnectionIO].bracket(createStatement)(st =>
+        for {
+          _ <- Sync[ConnectionIO].delay(st.execute(loadQuery.sql))
+          count <- Sync[ConnectionIO].delay(st.getUpdateCount)
+        } yield count)(st => Sync[ConnectionIO].delay(st.close))
 
       count <- (dropQuery.run *> createQuery.run *> load).transact(xa)
 
@@ -145,7 +134,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
     } yield ()
 
-  private def upload(bytes: Stream[F, Byte]): F[String] =
+  private def upload(bytes: Stream[F, Byte]): F[FileName] =
     for {
       freshNameSuffix <- Sync[F].delay(UUID.randomUUID().toString)
       freshName = s"reform-$freshNameSuffix"
@@ -162,18 +151,30 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- debug(s"Finished upload of $freshName")
 
-    } yield freshName
+    } yield FileName(freshName)
 
-  private def ensureSingleSegment(r: ResourcePath): F[FileName] =
+  // Ingres accepts double quotes as part of identifiers, but they must
+  // be repeated twice This implies identifiers with an even number of
+  // double quotes are valid and those with an odd number of double
+  // quotes are invalid.
+  // More details:
+  // https://docs.actian.com/avalanche/index.html#page/SQLLanguage%2FRegular_and_Delimited_Identifiers.htm%23ww414482
+  private def evenQuotes(tableName: String): Boolean =
+    if (tableName.toList.count(_ === '"') % 2 === 0)
+      true
+    else
+      false
+
+  private def ensureValidTableName(r: ResourcePath): F[TableName] =
     r match {
-      case file /: ResourcePath.Root => FileName(file).pure[F]
+      case file /: ResourcePath.Root if evenQuotes(file) => TableName(file).pure[F]
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def copyQuery(tableName: String, fileName: String): Fragment = {
-    val table = removeQuotes(tableName)
-    val clientId = removeQuotes(config.azureCredentials.clientId.value)
-    val clientSecret = removeQuotes(config.azureCredentials.clientSecret.value)
+  private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
+    val table = tableName.name
+    val clientId = config.azureCredentials.clientId.value
+    val clientSecret = config.azureCredentials.clientSecret.value
 
     fr"COPY" ++ Fragment.const0(s""""$table"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
       fr"WITH" ++ pairs(
@@ -185,7 +186,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   }
 
   private def authEndpoint(tid: TenantId): Fragment = {
-    val tenant = removeQuotes(tid.value)
+    val tenant = tid.value
 
     Fragment.const(s"'https://login.microsoftonline.com/$tenant/oauth2/token'")
   }
@@ -195,24 +196,24 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case (lhs, rhs) => lhs ++ fr"=" ++ rhs
     }).toList.intercalate(fr",")
 
-  private def abfsPath(file: String): Fragment = {
-    val container = removeQuotes(config.containerName.value)
-    val account = removeQuotes(config.accountName.value)
-    val fileName = removeQuotes(file)
+  private def abfsPath(file: FileName): Fragment = {
+    val container = config.containerName.value
+    val account = config.accountName.value
+    val fileName = file.value
 
     Fragment.const(
       s"'abfs://$container@$account.dfs.core.windows.net/$fileName'")
   }
 
-  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment = {
-    val table = removeQuotes(tableName)
+  private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment = {
+    val table = tableName.name
 
     fr"CREATE TABLE" ++ Fragment.const(s""""$table"""") ++
       Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
   }
 
-  private def dropTableQuery(tableName: String): Fragment = {
-    val table = removeQuotes(tableName)
+  private def dropTableQuery(tableName: TableName): Fragment = {
+    val table = tableName.name
 
     fr"DROP TABLE IF EXISTS" ++ Fragment.const(s""""$table"""")
   }
