@@ -31,6 +31,7 @@ import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, Ten
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
+import cats.ApplicativeError
 import cats.data.ValidatedNel
 import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.effect.concurrent.Ref
@@ -76,9 +77,12 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       for {
         tableName <- Stream.eval(ensureValidTableName(path))
 
+        cols <- ApplicativeError[Stream[F, ?], Throwable].fromEither(
+          ensureValidColumns(columns).leftMap(new RuntimeException(_)))
+
         freshName <- Stream.eval(upload(bytes))
 
-        _ <- Stream.eval(copy(tableName, freshName, columns)).onFinalize(deleteBlob(freshName))
+        _ <- Stream.eval(copy(tableName, freshName, cols)).onFinalize(deleteBlob(freshName))
 
       } yield ()
   }
@@ -94,24 +98,16 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
     } yield ()
 
-  private def copy(tableName: TableName, freshName: FileName, columns: List[TableColumn])
-      : F[Unit] =
+  private def copy(tableName: TableName, freshName: FileName, cols: NonEmptyList[Fragment])
+      : F[Unit] = {
+
+    val dropQuery = dropTableQuery(tableName).update
+
+    val createQuery = createTableQuery(tableName, cols).update
+
+    val loadQuery = copyQuery(tableName, freshName).update
+
     for {
-      cols0 <- columns.toNel.fold[F[NonEmptyList[TableColumn]]](
-        Sync[F].raiseError(new Exception("No columns specified")))(
-        _.asScalaz.pure[F])
-
-      cols <- cols0.traverse(mkColumn(_)).fold[F[NonEmptyList[Fragment]]](
-        errs => Sync[F].raiseError(
-          new Exception(s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")),
-        _.pure[F])
-
-      dropQuery = dropTableQuery(tableName).update
-
-      createQuery = createTableQuery(tableName, cols).update
-
-      loadQuery = copyQuery(tableName, freshName).update
-
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
       _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
@@ -133,6 +129,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       _ <- debug(s"Finished table copy")
 
     } yield ()
+  }
 
   private def upload(bytes: Stream[F, Byte]): F[FileName] =
     for {
@@ -165,16 +162,26 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     else
       false
 
+  private def removeSingleQuotes(str: String): String =
+    str.replace("'", "")
+
   private def ensureValidTableName(r: ResourcePath): F[TableName] =
     r match {
       case file /: ResourcePath.Root if evenQuotes(file) => TableName(file).pure[F]
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
+  private def ensureValidColumns(columns: List[TableColumn]): Either[String, NonEmptyList[Fragment]] =
+    for {
+      cols0 <- columns.toNel.toRight("No columns specified")
+      cols <- cols0.traverse(mkColumn(_)).toEither.leftMap(errs =>
+        s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")
+    } yield cols.asScalaz
+
   private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
-    val table = tableName.name
-    val clientId = config.azureCredentials.clientId.value
-    val clientSecret = config.azureCredentials.clientSecret.value
+    val table = removeSingleQuotes(tableName.name)
+    val clientId = removeSingleQuotes(config.azureCredentials.clientId.value)
+    val clientSecret = removeSingleQuotes(config.azureCredentials.clientSecret.value)
 
     fr"COPY" ++ Fragment.const0(s""""$table"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
       fr"WITH" ++ pairs(
@@ -186,7 +193,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   }
 
   private def authEndpoint(tid: TenantId): Fragment = {
-    val tenant = tid.value
+    val tenant = removeSingleQuotes(tid.value)
 
     Fragment.const(s"'https://login.microsoftonline.com/$tenant/oauth2/token'")
   }
@@ -218,11 +225,25 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     fr"DROP TABLE IF EXISTS" ++ Fragment.const(s""""$table"""")
   }
 
-  private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
-    errs.map(_.show).intercalate(", ")
+  private def mkErrorString(errs: NonEmptyList[Either[ColumnType.Scalar, String]]): String =
+    (errs map {
+      case Left(invalidType) => s"Column of type ${invalidType.show} is not supported by Avalanche"
+      case Right(invalidName) => invalidName
+    }).intercalate(", ")
 
-  private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
-    columnTypeToAvalanche(c.tpe).map(Fragment.const(s""""${c.name}"""") ++ _)
+  private def mkColumn(c: TableColumn): ValidatedNel[Either[ColumnType.Scalar, String], Fragment] = {
+    val columnType =
+      columnTypeToAvalanche(c.tpe).leftMap(_.map(_.asLeft[String]))
+
+    val columnName =
+      if (evenQuotes(c.name))
+        Fragment.const(s""""${c.name}"""").validNel
+      else
+        s"Column ${c.name} is not valid."
+          .asRight.invalidNel
+
+    (columnName, columnType).mapN(_ ++ _)
+  }
 
   private def columnTypeToAvalanche(ct: ColumnType.Scalar)
       : ValidatedNel[ColumnType.Scalar, Fragment] =
