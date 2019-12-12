@@ -151,23 +151,22 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     } yield FileName(freshName)
 
   // Ingres accepts double quotes as part of identifiers, but they must
-  // be repeated twice This implies identifiers with an even number of
-  // double quotes are valid and those with an odd number of double
-  // quotes are invalid.
+  // be repeated twice. So we duplicate all quotes
   // More details:
   // https://docs.actian.com/avalanche/index.html#page/SQLLanguage%2FRegular_and_Delimited_Identifiers.htm%23ww414482
-  private def evenQuotes(tableName: String): Boolean =
-    if (tableName.toList.count(_ === '"') % 2 === 0)
-      true
-    else
-      false
+  private def escapeIdent(ident: String): String = {
+    val escaped = ident.replace("\"", "\"\"")
+
+    s""""$escaped""""
+  }
+
 
   private def removeSingleQuotes(str: String): String =
     str.replace("'", "")
 
   private def ensureValidTableName(r: ResourcePath): F[TableName] =
     r match {
-      case file /: ResourcePath.Root if evenQuotes(file) => TableName(file).pure[F]
+      case file /: ResourcePath.Root => TableName(escapeIdent(file)).pure[F]
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
@@ -179,11 +178,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     } yield cols.asScalaz
 
   private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
-    val table = removeSingleQuotes(tableName.name)
+    val table = tableName.name
     val clientId = removeSingleQuotes(config.azureCredentials.clientId.value)
     val clientSecret = removeSingleQuotes(config.azureCredentials.clientSecret.value)
 
-    fr"COPY" ++ Fragment.const0(s""""$table"""") ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
+    fr"COPY" ++ Fragment.const0(table) ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
       fr"WITH" ++ pairs(
       fr"AZURE_CLIENT_ENDPOINT" -> authEndpoint(config.azureCredentials.tenantId),
       fr"AZURE_CLIENT_ID" -> Fragment.const(s"'$clientId'"),
@@ -212,38 +211,23 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       s"'abfs://$container@$account.dfs.core.windows.net/$fileName'")
   }
 
-  private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment = {
-    val table = tableName.name
-
-    fr"CREATE TABLE" ++ Fragment.const(s""""$table"""") ++
+  private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment =
+    fr"CREATE TABLE" ++ Fragment.const(tableName.name) ++
       Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
-  }
 
   private def dropTableQuery(tableName: TableName): Fragment = {
     val table = tableName.name
 
-    fr"DROP TABLE IF EXISTS" ++ Fragment.const(s""""$table"""")
+    fr"DROP TABLE IF EXISTS" ++ Fragment.const(table)
   }
 
-  private def mkErrorString(errs: NonEmptyList[Either[ColumnType.Scalar, String]]): String =
-    (errs map {
-      case Left(invalidType) => s"Column of type ${invalidType.show} is not supported by Avalanche"
-      case Right(invalidName) => invalidName
-    }).intercalate(", ")
+  private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
+    errs
+      .map(err => s"Column of type ${err.show} is not supported by Avalanche")
+      .intercalate(", ")
 
-  private def mkColumn(c: TableColumn): ValidatedNel[Either[ColumnType.Scalar, String], Fragment] = {
-    val columnType =
-      columnTypeToAvalanche(c.tpe).leftMap(_.map(_.asLeft[String]))
-
-    val columnName =
-      if (evenQuotes(c.name))
-        Fragment.const(s""""${c.name}"""").validNel
-      else
-        s"Column ${c.name} is not valid."
-          .asRight.invalidNel
-
-    (columnName, columnType).mapN(_ ++ _)
-  }
+  private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
+    columnTypeToAvalanche(c.tpe).map(Fragment.const(escapeIdent(c.name)) ++ _)
 
   private def columnTypeToAvalanche(ct: ColumnType.Scalar)
       : ValidatedNel[ColumnType.Scalar, Fragment] =
