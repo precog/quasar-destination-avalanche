@@ -8,8 +8,8 @@ libraryDependencies += "com.slamdata" %% "quasar-destination-avalanche" % <versi
 
 ## Configuration
 
-The Avalanche destination uses Azure blob storage to stages. Its only
-means of authentication is [Azure Active
+The Avalanche destination uses Azure Blob Storage to stage files
+before loading. Its only means of authentication is [Azure Active
 Directory](https://azure.microsoft.com/en-us/services/active-directory/). It
 has the following format:
 
