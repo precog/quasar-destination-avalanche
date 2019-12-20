@@ -43,6 +43,6 @@ lazy val core = project
       "com.slamdata" %% "async-blobstore-core" % AsyncBlobstoreVersion),
     excludeDependencies += "org.typelevel" % "scala-library",
     libraryDependencies ++= Seq(
-      "org.specs2" %% "specs2-core" % "4.7.0" % Test),
+      "org.specs2" %% "specs2-core" % "4.7.1" % Test),
     packageBin in Compile := (assembly in Compile).value)
   .enablePlugins(AutomateHeaderPlugin, QuasarPlugin)
