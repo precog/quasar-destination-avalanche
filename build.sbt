@@ -8,8 +8,8 @@ scmInfo in ThisBuild := Some(ScmInfo(
 
 
 lazy val QuasarVersion = IO.read(file("./quasar-version")).trim
-val DoobieVersion = "0.7.0"
-val AsyncBlobstoreVersion = "1.1.0"
+val DoobieVersion = "0.8.8"
+val AsyncBlobstoreVersion = "1.1.3-64e1f9e"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(

@@ -34,12 +34,12 @@ import quasar.blobstore.azure.{
   TenantId
 }
 import quasar.connector.{DestinationModule, MonadResourceErr}
-import quasar.concurrent.NamedDaemonThreadFactory
+import quasar.{concurrent => qc}
 
 import argonaut._, Argonaut._
 
 import cats.data.EitherT
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 
 import eu.timepit.refined.auto._
 
@@ -103,13 +103,13 @@ object AvalancheDestinationModule extends DestinationModule {
       Sync[F].delay(
         Executors.newFixedThreadPool(
           threadCount,
-          NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
+          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
       .map(ExecutionContext.fromExecutor(_))
 
-  private def unboundedPool[F[_]: Sync](name: String): Resource[F, ExecutionContext] =
+  private def unboundedPool[F[_]: Sync](name: String): Resource[F, Blocker] =
     Resource.make(
       Sync[F].delay(
         Executors.newCachedThreadPool(
-          NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(ExecutionContext.fromExecutor(_))
+          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
+      .map(es => qc.Blocker(ExecutionContext.fromExecutor(es)))
 }
