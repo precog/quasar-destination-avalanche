@@ -24,15 +24,15 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 import quasar.api.push.RenderConfig
-import quasar.api.destination.{Destination, DestinationType, ResultSink}
+import quasar.api.destination.{DestinationColumn, DestinationType, LegacyDestination, ResultSink}
 import quasar.api.resource._
-import quasar.api.table.{ColumnType, TableColumn, TableName}
+import quasar.api.table.{ColumnType, TableName}
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
 import cats.ApplicativeError
-import cats.data.ValidatedNel
+import cats.data.{ValidatedNel, NonEmptyList}
 import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.effect.concurrent.Ref
 import cats.implicits._
@@ -49,15 +49,11 @@ import org.slf4s.Logging
 
 import pathy.Path.FileName
 
-import scalaz.NonEmptyList
-
-import shims._
-
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-  xa: Transactor[F],
-  refContainerURL: Ref[F, Expires[ContainerURL]],
-  refreshToken: F[Unit],
-  config: AvalancheConfig) extends Destination[F] with Logging {
+    xa: Transactor[F],
+    refContainerURL: Ref[F, Expires[ContainerURL]],
+    refreshToken: F[Unit],
+    config: AvalancheConfig) extends LegacyDestination[F] with Logging {
 
   private val IngresRenderConfig = RenderConfig.Csv(
     includeHeader = false,
@@ -70,9 +66,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   def destinationType: DestinationType =
     AvalancheDestinationModule.destinationType
 
-  def sinks: NonEmptyList[ResultSink[F]] = NonEmptyList(csvSink)
+  def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = NonEmptyList.of(csvSink)
 
-  private val csvSink: ResultSink[F] = ResultSink.csv[F](IngresRenderConfig) {
+  private val csvSink: ResultSink[F, ColumnType.Scalar] = ResultSink.csv[F, ColumnType.Scalar](IngresRenderConfig) {
     case (path, columns, bytes) =>
       for {
         tableName <- Stream.eval(ensureValidTableName(path))
@@ -170,12 +166,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def ensureValidColumns(columns: List[TableColumn]): Either[String, NonEmptyList[Fragment]] =
-    for {
-      cols0 <- columns.toNel.toRight("No columns specified")
-      cols <- cols0.traverse(mkColumn(_)).toEither.leftMap(errs =>
-        s"Some column types are not supported: ${mkErrorString(errs.asScalaz)}")
-    } yield cols.asScalaz
+  private def ensureValidColumns(columns: NonEmptyList[DestinationColumn[ColumnType.Scalar]])
+      : Either[String, NonEmptyList[Fragment]] =
+    columns.traverse(mkColumn(_)).toEither leftMap { errs =>
+      s"Some column types are not supported: ${mkErrorString(errs)}"
+    }
 
   private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
     val table = tableName.name
@@ -226,7 +221,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       .map(err => s"Column of type ${err.show} is not supported by Avalanche")
       .intercalate(", ")
 
-  private def mkColumn(c: TableColumn): ValidatedNel[ColumnType.Scalar, Fragment] =
+  private def mkColumn(c: DestinationColumn[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, Fragment] =
     columnTypeToAvalanche(c.tpe).map(Fragment.const(escapeIdent(c.name)) ++ _)
 
   private def columnTypeToAvalanche(ct: ColumnType.Scalar)
