@@ -23,12 +23,14 @@ import scala.util.matching.Regex
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-import quasar.api.push.RenderConfig
-import quasar.api.destination.{DestinationColumn, DestinationType, LegacyDestination, ResultSink}
+import quasar.api.{Column, ColumnType}
+import quasar.api.destination.DestinationType
 import quasar.api.resource._
-import quasar.api.table.{ColumnType, TableName}
+import quasar.api.table.TableName
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.connector.destination.{LegacyDestination, ResultSink}
+import quasar.connector.render.RenderConfig
 import quasar.blobstore.paths.{BlobPath, PathElem}
 
 import cats.ApplicativeError
@@ -68,7 +70,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
   def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = NonEmptyList.of(csvSink)
 
-  private val csvSink: ResultSink[F, ColumnType.Scalar] = ResultSink.csv[F, ColumnType.Scalar](IngresRenderConfig) {
+  private val csvSink: ResultSink[F, ColumnType.Scalar] = ResultSink.create[F, ColumnType.Scalar](IngresRenderConfig) {
     case (path, columns, bytes) =>
       for {
         tableName <- Stream.eval(ensureValidTableName(path))
@@ -166,7 +168,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def ensureValidColumns(columns: NonEmptyList[DestinationColumn[ColumnType.Scalar]])
+  private def ensureValidColumns(columns: NonEmptyList[Column[ColumnType.Scalar]])
       : Either[String, NonEmptyList[Fragment]] =
     columns.traverse(mkColumn(_)).toEither leftMap { errs =>
       s"Some column types are not supported: ${mkErrorString(errs)}"
@@ -221,7 +223,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       .map(err => s"Column of type ${err.show} is not supported by Avalanche")
       .intercalate(", ")
 
-  private def mkColumn(c: DestinationColumn[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, Fragment] =
+  private def mkColumn(c: Column[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, Fragment] =
     columnTypeToAvalanche(c.tpe).map(Fragment.const(escapeIdent(c.name)) ++ _)
 
   private def columnTypeToAvalanche(ct: ColumnType.Scalar)

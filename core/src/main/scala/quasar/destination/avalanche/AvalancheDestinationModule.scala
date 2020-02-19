@@ -25,7 +25,7 @@ import scala.util.{Either, Random}
 import java.util.concurrent.Executors
 
 import quasar.api.destination.DestinationError.InitializationError
-import quasar.api.destination.{Destination, DestinationError, DestinationType}
+import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.azure.{
   Azure,
   AzureCredentials,
@@ -33,7 +33,8 @@ import quasar.blobstore.azure.{
   ClientSecret,
   TenantId
 }
-import quasar.connector.{DestinationModule, MonadResourceErr}
+import quasar.connector.MonadResourceErr
+import quasar.connector.destination.{Destination, DestinationModule}
 import quasar.{concurrent => qc}
 
 import argonaut._, Argonaut._
