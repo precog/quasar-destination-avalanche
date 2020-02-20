@@ -36,7 +36,7 @@ jobs:
 
   publish-and-tag:
     name: Publish and Tag
-    if: github.event_name != 'pull_request' && (contains(github.head_ref, 'backport/v.*') || contains(github.head_ref, 'master'))
+    if: github.event_name != 'pull_request' && (contains(github.ref, 'backport/v.*') || contains(github.ref, 'master'))
     needs: [build]
     runs-on: [ubuntu-latest]
     steps:
@@ -60,6 +60,8 @@ jobs:
         run: mkdir ./scripts
       - name: Transfer Common Resources
         run: $SBT transferCommonResources
+      - name: Transfer Publish Resources
+        run: $SBT transferPublishAndTagResources
       - name: Export common secrets
         run: $SBT exportSecretsForActions
       - name: Run common setup
