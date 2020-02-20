@@ -1,5 +1,7 @@
 import scala.collection.Seq
 
+ThisBuild / scalaVersion := "2.12.10"
+
 homepage in ThisBuild := Some(url("https://github.com/slamdata/quasar-destination-avalanche"))
 
 scmInfo in ThisBuild := Some(ScmInfo(
