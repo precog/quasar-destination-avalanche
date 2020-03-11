@@ -9,7 +9,6 @@ scmInfo in ThisBuild := Some(ScmInfo(
   "scm:git@github.com:slamdata/quasar-destination-avalanche.git"))
 
 val DoobieVersion = "0.8.8"
-val AsyncBlobstoreVersion = "2.0.0"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
@@ -39,8 +38,8 @@ lazy val core = project
       "org.slf4s" %% "slf4s-api" % "1.7.25",
       "org.tpolecat" %% "doobie-core" % DoobieVersion,
       "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
-      "com.slamdata" %% "async-blobstore-azure" % AsyncBlobstoreVersion,
-      "com.slamdata" %% "async-blobstore-core" % AsyncBlobstoreVersion),
+      "com.slamdata" %% "async-blobstore-azure" % managedVersions.value("slamdata-async-blobstore"),
+      "com.slamdata" %% "async-blobstore-core" % managedVersions.value("slamdata-async-blobstore")),
     excludeDependencies += "org.typelevel" % "scala-library",
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % "4.8.3" % Test),
