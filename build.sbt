@@ -8,8 +8,6 @@ scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/slamdata/quasar-destination-avalanche"),
   "scm:git@github.com:slamdata/quasar-destination-avalanche.git"))
 
-
-lazy val QuasarVersion = IO.read(file("./quasar-version")).trim
 val DoobieVersion = "0.8.8"
 val AsyncBlobstoreVersion = "2.0.0"
 
@@ -35,7 +33,7 @@ lazy val core = project
       cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
     },
     quasarPluginName := "avalanche",
-    quasarPluginQuasarVersion := QuasarVersion,
+    quasarPluginQuasarVersion := managedVersions.value("slamdata-quasar"),
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.AvalancheDestinationModule$"),
     quasarPluginDependencies ++= Seq(
       "org.slf4s" %% "slf4s-api" % "1.7.25",
