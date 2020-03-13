@@ -2,11 +2,13 @@ import scala.collection.Seq
 
 ThisBuild / scalaVersion := "2.12.10"
 
-homepage in ThisBuild := Some(url("https://github.com/slamdata/quasar-destination-avalanche"))
+ThisBuild / githubRepository := "quasar-destination-avalanche"
+
+homepage in ThisBuild := Some(url("https://github.com/precog/quasar-destination-avalanche"))
 
 scmInfo in ThisBuild := Some(ScmInfo(
-  url("https://github.com/slamdata/quasar-destination-avalanche"),
-  "scm:git@github.com:slamdata/quasar-destination-avalanche.git"))
+  url("https://github.com/precog/quasar-destination-avalanche"),
+  "scm:git@github.com:precog/quasar-destination-avalanche.git"))
 
 val DoobieVersion = "0.8.8"
 
@@ -32,16 +34,16 @@ lazy val core = project
       cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
     },
     quasarPluginName := "avalanche",
-    quasarPluginQuasarVersion := managedVersions.value("slamdata-quasar"),
+    quasarPluginQuasarVersion := managedVersions.value("precog-quasar"),
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.AvalancheDestinationModule$"),
     quasarPluginDependencies ++= Seq(
       "org.slf4s" %% "slf4s-api" % "1.7.25",
       "org.tpolecat" %% "doobie-core" % DoobieVersion,
       "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
-      "com.slamdata" %% "async-blobstore-azure" % managedVersions.value("slamdata-async-blobstore"),
-      "com.slamdata" %% "async-blobstore-core" % managedVersions.value("slamdata-async-blobstore")),
+      "com.precog" %% "async-blobstore-azure" % managedVersions.value("precog-async-blobstore"),
+      "com.precog" %% "async-blobstore-core" % managedVersions.value("precog-async-blobstore")),
     excludeDependencies += "org.typelevel" % "scala-library",
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % "4.8.3" % Test),
     packageBin in Compile := (assembly in Compile).value)
-  .enablePlugins(AutomateHeaderPlugin, QuasarPlugin)
+  .enablePlugins(QuasarPlugin)
