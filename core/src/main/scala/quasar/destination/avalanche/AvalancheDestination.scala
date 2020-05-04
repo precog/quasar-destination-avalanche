@@ -17,39 +17,33 @@
 package quasar.destination.avalanche
 
 import scala.Predef._
-import scala._
-import scala.util.matching.Regex
-
-import java.time.format.DateTimeFormatter
-import java.util.UUID
-
-import quasar.api.{Column, ColumnType}
-import quasar.api.destination.DestinationType
-import quasar.api.resource._
-import quasar.api.table.TableName
-import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
-import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.connector.destination.{LegacyDestination, ResultSink}
-import quasar.connector.render.RenderConfig
-import quasar.blobstore.paths.{BlobPath, PathElem}
 
 import cats.ApplicativeError
 import cats.data.{ValidatedNel, NonEmptyList}
-import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.effect.concurrent.Ref
+import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.implicits._
-
 import com.microsoft.azure.storage.blob.ContainerURL
-
 import doobie._
-import doobie.implicits._
 import doobie.free.connection.createStatement
-
+import doobie.implicits._
 import fs2.Stream
-
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import org.slf4s.Logging
-
 import pathy.Path.FileName
+import quasar.api.destination.DestinationType
+import quasar.api.resource._
+import quasar.api.table.TableName
+import quasar.api.{Column, ColumnType}
+import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
+import quasar.blobstore.paths.{BlobPath, PathElem}
+import quasar.connector.destination.{LegacyDestination, ResultSink}
+import quasar.connector.render.RenderConfig
+import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.destination.avalanche.WriteMode._
+import scala._
+import scala.util.matching.Regex
 
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     xa: Transactor[F],
@@ -101,6 +95,8 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
     val dropQuery = dropTableQuery(tableName).update
 
+    val truncateQuery = truncateTableQuery(tableName).update
+
     val createQuery = createTableQuery(tableName, cols).update
 
     val loadQuery = copyQuery(tableName, freshName).update
@@ -108,9 +104,14 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     for {
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
-      _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
+      _ <- config.writeMode match {
+        case None => debug(s"Drop table query:\n${dropQuery.sql}")
+        case Some(Replace) => debug(s"Drop table query:\n${dropQuery.sql}")
+        case Some(Truncate) => debug(s"Truncate table query:\n${truncateQuery.sql}")
+        case Some(Create) => ().pure[F]
+      }
 
-      _ <- debug(s"Drop table query:\n${dropQuery.sql}")
+      _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
 
       load = Sync[ConnectionIO].bracket(createStatement)(st =>
         for {
@@ -118,7 +119,12 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
           count <- Sync[ConnectionIO].delay(st.getUpdateCount)
         } yield count)(st => Sync[ConnectionIO].delay(st.close))
 
-      count <- (dropQuery.run *> createQuery.run *> load).transact(xa)
+      count <- ((config.writeMode match {
+          case None => dropQuery.run
+          case Some(Replace) => dropQuery.run
+          case Some(Truncate) => truncateQuery.run
+          case Some(Create) => ().pure[ConnectionIO]
+        }) *> createQuery.run *> load).transact(xa)
 
       _ <- debug(s"Finished load")
 
@@ -216,6 +222,12 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     val table = tableName.name
 
     fr"DROP TABLE IF EXISTS" ++ Fragment.const(table)
+  }
+
+  private def truncateTableQuery(tableName: TableName): Fragment = {
+    val table = tableName.name
+
+    fr"TRUNCATE TABLE IF EXISTS" ++ Fragment.const(table)
   }
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =

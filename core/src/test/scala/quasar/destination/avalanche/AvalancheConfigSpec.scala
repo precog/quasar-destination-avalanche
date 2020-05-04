@@ -16,24 +16,16 @@
 
 package quasar.destination.avalanche
 
-import quasar.blobstore.azure.{
-  AccountName,
-  AzureCredentials,
-  ClientId,
-  ClientSecret,
-  ContainerName,
-  TenantId
-}
-
 import argonaut._, Argonaut._
-
 import java.net.URI
-
 import org.specs2.mutable.Specification
+import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
+import quasar.destination.avalanche.WriteMode._
+import scala._
 
 object AvalancheConfigSpec extends Specification {
-  "parses a valid config" >> {
-    val testConfig = Json.obj(
+  "encodes and decodes a valid config without write mode" >> {
+    val initialJson = Json.obj(
       "accountName" := "foo",
       "containerName" := "bar",
       "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
@@ -43,15 +35,53 @@ object AvalancheConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    testConfig.as[AvalancheConfig].result must beRight(
+    val decoded = initialJson.as[AvalancheConfig].result
+
+    val finalJson = decoded.map(d => d.asJson)
+
+    decoded must beRight(
       AvalancheConfig(
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("super secret"),
+        None,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
           ClientSecret("client-secret-string"))))
+
+    finalJson must be right(initialJson)
+  }
+
+  "parses and prints a valid config with write mode" >> {
+    val initialJson = Json.obj(
+      "accountName" := "foo",
+      "containerName" := "bar",
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "clusterPassword" := "super secret",
+      "writeMode" := "create",
+      "credentials" := Json.obj(
+        "clientId" := "client-id-uuid",
+        "tenantId" := "tenant-id-uuid",
+        "clientSecret" := "client-secret-string"))
+
+    val decoded = initialJson.as[AvalancheConfig].result
+
+    val finalJson = decoded.map(d => d.asJson)
+
+    decoded must beRight(
+      AvalancheConfig(
+        AccountName("foo"),
+        ContainerName("bar"),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        ClusterPassword("super secret"),
+        Some(Create),
+        AzureCredentials.ActiveDirectory(
+          ClientId("client-id-uuid"),
+          TenantId("tenant-id-uuid"),
+          ClientSecret("client-secret-string"))))
+
+    finalJson must be right(initialJson)
   }
 }
