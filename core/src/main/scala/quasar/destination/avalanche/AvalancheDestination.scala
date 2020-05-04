@@ -105,10 +105,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
 
       _ <- config.writeMode match {
-        case None => debug(s"Drop table query:\n${dropQuery.sql}")
-        case Some(Replace) => debug(s"Drop table query:\n${dropQuery.sql}")
-        case Some(Truncate) => debug(s"Truncate table query:\n${truncateQuery.sql}")
-        case Some(Create) => ().pure[F]
+        case Replace => debug(s"Drop table query:\n${dropQuery.sql}")
+        case Truncate => debug(s"Truncate table query:\n${truncateQuery.sql}")
+        case Create => ().pure[F]
       }
 
       _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
@@ -120,10 +119,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
         } yield count)(st => Sync[ConnectionIO].delay(st.close))
 
       count <- ((config.writeMode match {
-          case None => dropQuery.run
-          case Some(Replace) => dropQuery.run
-          case Some(Truncate) => truncateQuery.run
-          case Some(Create) => ().pure[ConnectionIO]
+          case Replace => dropQuery.run
+          case Truncate => truncateQuery.run
+          case Create => ().pure[ConnectionIO]
         }) *> createQuery.run *> load).transact(xa)
 
       _ <- debug(s"Finished load")

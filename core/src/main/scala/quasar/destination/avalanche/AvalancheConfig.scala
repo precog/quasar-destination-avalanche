@@ -20,7 +20,6 @@ import scala.Predef._
 
 import java.net.{URI, URISyntaxException}
 import scala._
-
 import quasar.blobstore.azure.{
   AccountName,
   AzureCredentials,
@@ -32,6 +31,7 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
+import quasar.destination.avalanche.WriteMode._
 
 import argonaut._, Argonaut._
 
@@ -44,7 +44,7 @@ final case class AvalancheConfig(
   containerName: ContainerName,
   connectionUri: URI,
   password: ClusterPassword,
-  writeMode: Option[WriteMode],
+  writeMode: WriteMode,
   azureCredentials: AzureCredentials.ActiveDirectory)
 
 object AvalancheConfig {
@@ -86,7 +86,7 @@ object AvalancheConfig {
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
         ("clusterPassword" := c.password.value) ->:
-        c.writeMode.map("writeMode" := _) ->?:
+        ((if (c.writeMode == Replace) { None } else { Some(c.writeMode) }).map("writeMode" := _)) ->?:
         ("credentials" := c.azureCredentials) ->:
         jEmptyObject,
       },
@@ -102,6 +102,6 @@ object AvalancheConfig {
          ContainerName(containerName),
          connectionUri,
          ClusterPassword(clusterPassword),
-         writeMode,
+         writeMode.getOrElse(Replace),
          credentials)))
 }

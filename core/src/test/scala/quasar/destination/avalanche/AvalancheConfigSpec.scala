@@ -21,7 +21,6 @@ import java.net.URI
 import org.specs2.mutable.Specification
 import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
 import quasar.destination.avalanche.WriteMode._
-import scala._
 
 object AvalancheConfigSpec extends Specification {
   "encodes and decodes a valid config without write mode" >> {
@@ -45,7 +44,7 @@ object AvalancheConfigSpec extends Specification {
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("super secret"),
-        None,
+        Replace,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
@@ -60,7 +59,7 @@ object AvalancheConfigSpec extends Specification {
       "containerName" := "bar",
       "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
       "clusterPassword" := "super secret",
-      "writeMode" := "create",
+      "writeMode" := "truncate",
       "credentials" := Json.obj(
         "clientId" := "client-id-uuid",
         "tenantId" := "tenant-id-uuid",
@@ -76,7 +75,7 @@ object AvalancheConfigSpec extends Specification {
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("super secret"),
-        Some(Create),
+        Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
