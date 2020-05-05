@@ -86,7 +86,7 @@ object AvalancheConfig {
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
         ("clusterPassword" := c.password.value) ->:
-        ((if (c.writeMode == Replace) { None } else { Some(c.writeMode) }).map("writeMode" := _)) ->?:
+        ("writeMode" := c.writeMode) ->:
         ("credentials" := c.azureCredentials) ->:
         jEmptyObject,
       },

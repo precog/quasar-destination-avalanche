@@ -34,11 +34,7 @@ object AvalancheConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    val decoded = initialJson.as[AvalancheConfig].result
-
-    val finalJson = decoded.map(d => d.asJson)
-
-    decoded must beRight(
+    initialJson.as[AvalancheConfig].result must beRight(
       AvalancheConfig(
         AccountName("foo"),
         ContainerName("bar"),
@@ -49,8 +45,6 @@ object AvalancheConfigSpec extends Specification {
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
           ClientSecret("client-secret-string"))))
-
-    finalJson must be right(initialJson)
   }
 
   "parses and prints a valid config with write mode" >> {
@@ -65,11 +59,7 @@ object AvalancheConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    val decoded = initialJson.as[AvalancheConfig].result
-
-    val finalJson = decoded.map(d => d.asJson)
-
-    decoded must beRight(
+    initialJson.as[AvalancheConfig].result must beRight(
       AvalancheConfig(
         AccountName("foo"),
         ContainerName("bar"),
@@ -80,7 +70,5 @@ object AvalancheConfigSpec extends Specification {
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
           ClientSecret("client-secret-string"))))
-
-    finalJson must be right(initialJson)
   }
 }
