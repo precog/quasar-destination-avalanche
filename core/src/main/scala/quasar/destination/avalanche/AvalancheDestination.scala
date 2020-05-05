@@ -95,6 +95,8 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
     val dropQuery = dropTableQuery(tableName).update
 
+    val existanceQuery = existanceTableQuery(tableName).query[Int]
+
     val truncateQuery = truncateTableQuery(tableName).update
 
     val createQuery = createTableQuery(tableName, cols).update
@@ -119,10 +121,13 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
         } yield count)(st => Sync[ConnectionIO].delay(st.close))
 
       count <- ((config.writeMode match {
-          case Replace => dropQuery.run
-          case Truncate => truncateQuery.run
-          case Create => ().pure[ConnectionIO]
-        }) *> createQuery.run *> load).transact(xa)
+          case Replace => dropQuery.run *> createQuery.run
+          case Create => createQuery.run
+          case Truncate => (for {
+              exists <- existanceQuery.option
+              result <- if (exists == Some(1)) truncateQuery.run else createQuery.run
+            } yield result)
+        }) *> load).transact(xa)
 
       _ <- debug(s"Finished load")
 
@@ -225,7 +230,13 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   private def truncateTableQuery(tableName: TableName): Fragment = {
     val table = tableName.name
 
-    fr"TRUNCATE TABLE IF EXISTS" ++ Fragment.const(table)
+    fr"MODIFY" ++ Fragment.const(table) ++ fr"TO TRUNCATED"
+  }
+
+  private def existanceTableQuery(tableName: TableName): Fragment = {
+    val table = tableName.name.toLowerCase.substring(1, tableName.name.length()-1)
+
+    fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'"
   }
 
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
