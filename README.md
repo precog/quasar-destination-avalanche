@@ -19,6 +19,7 @@ has the following format:
   "containerName": String,
   "connectionUri": String,
   "clusterPassword": String,
+  "writeMode": "create" | "replace" | "truncate",
   "credentials": Object
 }
 ```
@@ -29,6 +30,7 @@ has the following format:
   stage files before loading into Avalanche
 - `connectionUri` is the JDBC URI provided by Actian
 - `clusterPassword` is the password for `dbuser`
+- `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
 - `credentials` specifies the Azure Active Directory configuration
 
 ```json
