@@ -91,11 +91,11 @@ object AvalancheDestinationModule extends DestinationModule {
       _ <- EitherT.right(Resource.liftF(
           transactor.configure(ds => Sync[F].delay(ds.setMaxLifetime(MaxLifetime.toMillis)))))
 
-      (refContainerURL, refresh) <- EitherT.right[InitializationError[Json]](
-        Resource.liftF(Azure.refContainerUrl(AvalancheConfig.toConfig(cfg))))
+      (refContainerClient, refresh) <- EitherT.right[InitializationError[Json]](
+        Resource.liftF(Azure.refContainerClient(AvalancheConfig.toConfig(cfg))))
 
       dest: Destination[F] =
-        new AvalancheDestination[F](transactor, refContainerURL, refresh, cfg)
+        new AvalancheDestination[F](transactor, refContainerClient, refresh, cfg)
 
     } yield dest).value
 
