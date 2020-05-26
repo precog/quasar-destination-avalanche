@@ -44,3 +44,4 @@ has the following format:
 - `clientId` also called "Application Id"
 - `tenantId` also called "Directory Id"
 - `clientSecret` provided by Azure Active Directory
+
