@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche
+package quasar.destination.avalanche.azure
 
 import scala.Predef._
 
@@ -31,6 +31,7 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
+import quasar.destination.avalanche.WriteMode
 import quasar.destination.avalanche.WriteMode._
 
 import argonaut._, Argonaut._

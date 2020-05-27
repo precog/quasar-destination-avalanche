@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche
+package quasar.destination.avalanche.azure
 
 import scala.Predef._
 import scala._
