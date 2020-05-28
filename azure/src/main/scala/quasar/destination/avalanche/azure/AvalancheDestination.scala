@@ -16,7 +16,7 @@
 
 package quasar.destination.avalanche.azure
 
-import scala.Predef._
+import scala.Predef.{String, ArrowAssoc}
 
 import cats.ApplicativeError
 import cats.data.{ValidatedNel, NonEmptyList}
@@ -42,7 +42,18 @@ import quasar.connector.destination.{LegacyDestination, ResultSink}
 import quasar.connector.render.RenderConfig
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.destination.avalanche.WriteMode._
-import scala._
+
+import scala.{
+  Byte,
+  Either,
+  Int,
+  List,
+  RuntimeException,
+  Some,
+  StringContext,
+  Throwable,
+  Unit
+ }
 import scala.util.matching.Regex
 
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](

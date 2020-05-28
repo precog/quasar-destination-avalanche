@@ -16,10 +16,9 @@
 
 package quasar.destination.avalanche.azure
 
-import scala.Predef._
-
+import argonaut._, Argonaut._
+import cats.implicits._
 import java.net.{URI, URISyntaxException}
-import scala._
 import quasar.blobstore.azure.{
   AccountName,
   AzureCredentials,
@@ -31,12 +30,14 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
-import quasar.destination.avalanche.WriteMode
-import quasar.destination.avalanche.WriteMode._
-
-import argonaut._, Argonaut._
-
-import cats.implicits._
+import quasar.destination.avalanche.WriteMode, WriteMode._
+import scala.{
+  Either, 
+  None, 
+  Option, 
+  StringContext
+}
+import scala.Predef.String
 
 final case class ClusterPassword(value: String)
 

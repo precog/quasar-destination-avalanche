@@ -16,8 +16,13 @@
 
 package quasar.destination.avalanche.azure
 
-import scala.Predef._
-import scala._
+import scala.Predef.String
+
+import scala.{
+  Int,
+  StringContext
+}
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Either, Random}
