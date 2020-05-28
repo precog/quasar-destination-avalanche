@@ -23,7 +23,7 @@ import cats.data.{ValidatedNel, NonEmptyList}
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.implicits._
-import com.microsoft.azure.storage.blob.ContainerURL
+import com.azure.storage.blob.BlobContainerAsyncClient
 import doobie._
 import doobie.free.connection.createStatement
 import doobie.implicits._
@@ -58,7 +58,7 @@ import scala.util.matching.Regex
 
 final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     xa: Transactor[F],
-    refContainerURL: Ref[F, Expires[ContainerURL]],
+    refContainerClient: Ref[F, Expires[BlobContainerAsyncClient]],
     refreshToken: F[Unit],
     config: AvalancheConfig) extends LegacyDestination[F] with Logging {
 
@@ -94,9 +94,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     for {
       _ <- refreshToken
 
-      containerURL <- refContainerURL.get
+      containerClient <- refContainerClient.get
 
-      deleteService = AzureDeleteService.mk[F](containerURL.value)
+      deleteService = AzureDeleteService.mk[F](containerClient.value)
 
       _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
     } yield ()
@@ -156,9 +156,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
 
       _ <- refreshToken
 
-      containerURL <- refContainerURL.get
+      containerClient <- refContainerClient.get
 
-      put = AzurePutService.mk[F](containerURL.value)
+      put = AzurePutService.mk[F](containerClient.value)
 
       _ <- debug(s"Starting upload of $freshName")
 
