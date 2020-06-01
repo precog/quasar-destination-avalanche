@@ -41,7 +41,7 @@ import scala.Predef.String
 
 final case class ClusterPassword(value: String)
 
-final case class AvalancheConfig(
+final case class AvalancheAzureConfig(
   accountName: AccountName,
   containerName: ContainerName,
   connectionUri: URI,
@@ -49,8 +49,8 @@ final case class AvalancheConfig(
   writeMode: WriteMode,
   azureCredentials: AzureCredentials.ActiveDirectory)
 
-object AvalancheConfig {
-  def toConfig(config: AvalancheConfig): Config =
+object AvalancheAzureConfig {
+  def toConfig(config: AvalancheAzureConfig): Config =
     DefaultConfig(
       config.containerName,
       config.azureCredentials.some,
@@ -82,8 +82,8 @@ object AvalancheConfig {
       ad => (ad.clientId.value, ad.tenantId.value, ad.clientSecret.value).some)(
       "clientId", "tenantId", "clientSecret")
 
-  implicit def AvalancheConfigCodecJson: CodecJson[AvalancheConfig] =
-    CodecJson({ (c: AvalancheConfig) =>
+  implicit def AvalancheAzureConfigCodecJson: CodecJson[AvalancheAzureConfig] =
+    CodecJson({ (c: AvalancheAzureConfig) =>
         ("accountName" := c.accountName.value) ->:
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
@@ -99,7 +99,7 @@ object AvalancheConfig {
          clusterPassword <- (c --\ "clusterPassword").as[String]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
-       } yield AvalancheConfig(
+       } yield AvalancheAzureConfig(
          AccountName(accountName),
          ContainerName(containerName),
          connectionUri,

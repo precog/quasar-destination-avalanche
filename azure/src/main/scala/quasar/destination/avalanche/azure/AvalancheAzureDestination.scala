@@ -27,7 +27,7 @@ import com.azure.storage.blob.BlobContainerAsyncClient
 import doobie._
 import doobie.free.connection.createStatement
 import doobie.implicits._
-import fs2.Stream
+import fs2.{compression, Stream}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import org.slf4s.Logging
@@ -42,7 +42,6 @@ import quasar.connector.destination.{LegacyDestination, ResultSink}
 import quasar.connector.render.RenderConfig
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.destination.avalanche.WriteMode._
-
 import scala.{
   Byte,
   Either,
@@ -56,11 +55,11 @@ import scala.{
  }
 import scala.util.matching.Regex
 
-final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
+final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     xa: Transactor[F],
     refContainerClient: Ref[F, Expires[BlobContainerAsyncClient]],
     refreshToken: F[Unit],
-    config: AvalancheConfig) extends LegacyDestination[F] with Logging {
+    config: AvalancheAzureConfig) extends LegacyDestination[F] with Logging {
 
   private val IngresRenderConfig = RenderConfig.Csv(
     includeHeader = false,
@@ -71,7 +70,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     localTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
 
   def destinationType: DestinationType =
-    AvalancheDestinationModule.destinationType
+    AvalancheAzureDestinationModule.destinationType
 
   def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = NonEmptyList.of(csvSink)
 
@@ -83,7 +82,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
         cols <- ApplicativeError[Stream[F, ?], Throwable].fromEither(
           ensureValidColumns(columns).leftMap(new RuntimeException(_)))
 
-        freshName <- Stream.eval(upload(bytes))
+        compressed = bytes.through(compression.gzip(bufferSize = 1024 * 32))
+
+        freshName <- Stream.eval(upload(compressed))
 
         _ <- Stream.eval(copy(tableName, freshName, cols)).onFinalize(deleteBlob(freshName))
 
@@ -152,7 +153,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   private def upload(bytes: Stream[F, Byte]): F[FileName] =
     for {
       freshNameSuffix <- Sync[F].delay(UUID.randomUUID().toString)
-      freshName = s"reform-$freshNameSuffix"
+      freshName = s"precog-$freshNameSuffix"
 
       _ <- refreshToken
 
