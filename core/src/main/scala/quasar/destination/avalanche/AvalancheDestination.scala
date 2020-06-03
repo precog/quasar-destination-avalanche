@@ -219,13 +219,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
     fr"CREATE TABLE" ++ Fragment.const(tableName) ++
       Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
 
-  private def dropTableQuery(tableName: String): Fragment = {
+  private def dropTableQuery(tableName: String): Fragment =
     fr"DROP TABLE IF EXISTS" ++ Fragment.const(tableName)
-  }
 
-  private def truncateTableQuery(tableName: String): Fragment = {
+  private def truncateTableQuery(tableName: String): Fragment =
     fr"MODIFY" ++ Fragment.const(tableName) ++ fr"TO TRUNCATED"
-  }
 
   private def existanceTableQuery(tableName: String): Fragment = {
     val table = tableName.toLowerCase.substring(1, tableName.length() - 1)
