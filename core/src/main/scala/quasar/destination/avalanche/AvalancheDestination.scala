@@ -34,7 +34,6 @@ import org.slf4s.Logging
 import pathy.Path.FileName
 import quasar.api.destination.DestinationType
 import quasar.api.resource._
-import quasar.api.table.TableName
 import quasar.api.{Column, ColumnType}
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.blobstore.paths.{BlobPath, PathElem}
@@ -90,7 +89,7 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
     } yield ()
 
-  private def copy(tableName: TableName, freshName: FileName, cols: NonEmptyList[Fragment])
+  private def copy(tableName: String, freshName: FileName, cols: NonEmptyList[Fragment])
       : F[Unit] = {
 
     val dropQuery = dropTableQuery(tableName).update
@@ -171,9 +170,9 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
   private def removeSingleQuotes(str: String): String =
     str.replace("'", "")
 
-  private def ensureValidTableName(r: ResourcePath): F[TableName] =
+  private def ensureValidTableName(r: ResourcePath): F[String] =
     r match {
-      case file /: ResourcePath.Root => TableName(escapeIdent(file)).pure[F]
+      case file /: ResourcePath.Root => escapeIdent(file).pure[F]
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
@@ -183,12 +182,11 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       s"Some column types are not supported: ${mkErrorString(errs)}"
     }
 
-  private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
-    val table = tableName.name
+  private def copyQuery(tableName: String, fileName: FileName): Fragment = {
     val clientId = removeSingleQuotes(config.azureCredentials.clientId.value)
     val clientSecret = removeSingleQuotes(config.azureCredentials.clientSecret.value)
 
-    fr"COPY" ++ Fragment.const0(table) ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
+    fr"COPY" ++ Fragment.const0(tableName) ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
       fr"WITH" ++ pairs(
       fr"AZURE_CLIENT_ENDPOINT" -> authEndpoint(config.azureCredentials.tenantId),
       fr"AZURE_CLIENT_ID" -> Fragment.const(s"'$clientId'"),
@@ -217,24 +215,18 @@ final class AvalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadReso
       s"'abfs://$container@$account.dfs.core.windows.net/$fileName'")
   }
 
-  private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment =
-    fr"CREATE TABLE" ++ Fragment.const(tableName.name) ++
+  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
+    fr"CREATE TABLE" ++ Fragment.const(tableName) ++
       Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
 
-  private def dropTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name
+  private def dropTableQuery(tableName: String): Fragment =
+    fr"DROP TABLE IF EXISTS" ++ Fragment.const(tableName)
 
-    fr"DROP TABLE IF EXISTS" ++ Fragment.const(table)
-  }
+  private def truncateTableQuery(tableName: String): Fragment =
+    fr"MODIFY" ++ Fragment.const(tableName) ++ fr"TO TRUNCATED"
 
-  private def truncateTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name
-
-    fr"MODIFY" ++ Fragment.const(table) ++ fr"TO TRUNCATED"
-  }
-
-  private def existanceTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name.toLowerCase.substring(1, tableName.name.length()-1)
+  private def existanceTableQuery(tableName: String): Fragment = {
+    val table = tableName.toLowerCase.substring(1, tableName.length() - 1)
 
     fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'"
   }
