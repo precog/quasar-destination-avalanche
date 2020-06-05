@@ -3,10 +3,16 @@
 ## Usage
 
 ```sbt
-libraryDependencies += "com.precog" %% "quasar-destination-avalanche" % <version>
+libraryDependencies += "com.precog" %% "quasar-destination-avalanche-azure" % <version>
 ```
 
-## Configuration
+or
+
+```sbt
+libraryDependencies += "com.precog" %% "quasar-destination-avalanche-s3" % <version>
+```
+
+## Avalanche with Azure Blob Storage Configuration
 
 The Avalanche destination uses Azure Blob Storage to stage files
 before loading. Its only means of authentication is [Azure Active
@@ -43,5 +49,80 @@ has the following format:
 
 - `clientId` also called "Application Id"
 - `tenantId` also called "Directory Id"
-- `clientSecret` provided by Azure Active Directory
+- `clientSecret` provided by Azure Active 
+
+## Avalanche with AWS S3 Blob Storage Configuration
+
+Configuration format for Avalanche with S3 staging is:
+
+```json
+{
+  "bucketConfig": Object,
+  "jdbcUri": String,
+  "password": String,
+  "writemode": "create" | "replace" | "truncate",
+}
+```
+
+Where `bucketConfig has this format:
+
+```json
+{
+  "bucket": String,
+  "accessKey": String,
+  "secretKey": String,
+  "region": String
+}
+```
+
+Example:
+
+```json
+{
+  "bucketConfig": {
+    "bucket": "bucket-name",
+    "accessKey": "aws-access-key",
+    "secretKey": "aws-secret-key",
+    "region": "aws-bucket-region"},
+  "jdbcUri": "jdbc:ingres://<avalanche-cluster-domain>:27839/db;encryption=on",
+  "password": "avalanche-cluster-password",
+  "writemode": "create"
+}
+```
+
+### Deployment Requirements
+
+In order to use S3 staging with Avalanche both must be in the same AWS region.
+
+You must also create an IAM user, generate an AccessKey and SecretKey, and assign this policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "VisualEditor0",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket",
+        "s3:DeleteObject",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::<bucket-name>/*",
+        "arn:aws:s3:::<bucket-name>"
+      ]
+    },
+    {
+      "Sid": "VisualEditor1",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::<bucket-name>/*"
+    }
+  ]
+}
+```
+
 
