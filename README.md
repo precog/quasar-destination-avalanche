@@ -64,7 +64,7 @@ Configuration format for Avalanche with S3 staging is:
 }
 ```
 
-Where `bucketConfig has this format:
+Where `bucketConfig` has this format:
 
 ```json
 {
