@@ -29,7 +29,6 @@ import org.slf4s.Logging
 import pathy.Path.FileName
 import quasar.api.destination.DestinationType
 import quasar.api.resource._
-import quasar.api.table.TableName
 import quasar.api.{Column, ColumnType}
 import quasar.blobstore.services.{DeleteService, PutService}
 import quasar.blobstore.paths.{BlobPath, PathElem}
@@ -48,6 +47,8 @@ import scala.{
  }
 import scala.Predef.{String, ArrowAssoc}
 import scala.util.matching.Regex
+
+final case class TableName(value: String)
 
 final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     deleteService: DeleteService[F],
@@ -161,7 +162,7 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
     }
 
   private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
-    val table = tableName.name
+    val table = tableName.value
     val auth = config.bucketConfig
     val akey = auth.accessKey
     val skey = auth.secretKey
@@ -187,24 +188,24 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
   }
 
   private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment = {
-    fr"CREATE TABLE" ++ Fragment.const(tableName.name) ++
+    fr"CREATE TABLE" ++ Fragment.const(tableName.value) ++
       Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
   }
 
   private def dropTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name
+    val table = tableName.value
 
     fr"DROP TABLE IF EXISTS" ++ Fragment.const(table)
   }
 
   private def truncateTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name
+    val table = tableName.value
 
     fr"MODIFY" ++ Fragment.const(table) ++ fr"TO TRUNCATED"
   }
 
   private def existanceTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.name.toLowerCase.substring(1, tableName.name.length()-1)
+    val table = tableName.value.toLowerCase.substring(1, tableName.value.length()-1)
 
     fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'"
   }
