@@ -16,10 +16,11 @@
 
 package quasar.destination.avalanche.azure
 
-import scala.Predef.{String, ArrowAssoc}
+import quasar.destination.avalanche.AvalancheQueries._
+
 
 import cats.ApplicativeError
-import cats.data.{ValidatedNel, NonEmptyList}
+import cats.data.NonEmptyList
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.implicits._
@@ -28,30 +29,30 @@ import doobie._
 import doobie.free.connection.createStatement
 import doobie.implicits._
 import fs2.{compression, Stream}
-import java.time.format.DateTimeFormatter
 import java.util.UUID
+import java.net.URI
 import org.slf4s.Logging
 import pathy.Path.FileName
 import quasar.api.destination.DestinationType
 import quasar.api.resource._
-import quasar.api.{Column, ColumnType}
+import quasar.api.ColumnType
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 import quasar.connector.destination.{LegacyDestination, ResultSink}
-import quasar.connector.render.RenderConfig
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.destination.avalanche.WriteMode._
 import scala.{
   Byte,
-  Either,
   Int,
   List,
   RuntimeException,
+  Seq,
   Some,
   StringContext,
   Throwable,
   Unit
  }
+import scala.Predef.String
 import scala.util.matching.Regex
 
 final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
@@ -60,34 +61,27 @@ final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: Mona
     refreshToken: F[Unit],
     config: AvalancheAzureConfig) extends LegacyDestination[F] with Logging {
 
-  private val IngresRenderConfig = RenderConfig.Csv(
-    includeHeader = false,
-    offsetDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS xxx"),
-    offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
-    localDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS"),
-    localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd"),
-    localTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
-
   def destinationType: DestinationType =
     AvalancheAzureDestinationModule.destinationType
 
   def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = NonEmptyList.of(csvSink)
 
-  private val csvSink: ResultSink[F, ColumnType.Scalar] = ResultSink.create[F, ColumnType.Scalar](IngresRenderConfig) {
-    case (path, columns, bytes) =>
-      for {
-        tableName <- Stream.eval(ensureValidTableName(path))
+  private val csvSink: ResultSink[F, ColumnType.Scalar] = 
+    ResultSink.create[F, ColumnType.Scalar](AvalancheRenderConfig) {
+      case (path, columns, bytes) =>
+        for {
+          tableName <- Stream.eval(ensureValidTableName(path))
 
-        cols <- ApplicativeError[Stream[F, ?], Throwable].fromEither(
-          ensureValidColumns(columns).leftMap(new RuntimeException(_)))
+          cols <- ApplicativeError[Stream[F, ?], Throwable].fromEither(
+            ensureValidColumns(columns).leftMap(new RuntimeException(_)))
 
-        compressed = bytes.through(compression.gzip(bufferSize = 1024 * 32))
+          compressed = bytes.through(compression.gzip(bufferSize = 1024 * 32))
 
-        freshName <- Stream.eval(upload(compressed))
+          freshName <- Stream.eval(upload(compressed))
 
-        _ <- Stream.eval(copy(tableName, freshName, cols)).onFinalize(deleteBlob(freshName))
+          _ <- Stream.eval(copy(tableName, freshName, cols)).onFinalize(deleteBlob(freshName))
 
-      } yield ()
+        } yield ()
   }
 
   private def deleteBlob(freshName: FileName): F[Unit] =
@@ -101,7 +95,7 @@ final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: Mona
       _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
     } yield ()
 
-  private def copy(tableName: String, freshName: FileName, cols: NonEmptyList[Fragment])
+  private def copy(tableName: String, fileName: FileName, cols: NonEmptyList[Fragment])
       : F[Unit] = {
 
     val dropQuery = dropTableQuery(tableName).update
@@ -112,7 +106,16 @@ final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: Mona
 
     val createQuery = createTableQuery(tableName, cols).update
 
-    val loadQuery = copyQuery(tableName, freshName).update
+    val staginUri = URI.create(
+      s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/${fileName.value}")
+    val authCfg = config.azureCredentials
+    val endpoint = authEndpoint(authCfg.tenantId)
+    val auth = Seq[(String, String)](
+      ("AZURE_CLIENT_ENDPOINT", endpoint),
+      ("AZURE_CLIENT_ID", authCfg.clientId.value),
+      ("AZURE_CLIENT_SECRET", authCfg.clientSecret.value))
+
+    val loadQuery = copyQuery(tableName, fileName.value, staginUri, auth).update
 
     for {
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
@@ -168,17 +171,6 @@ final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: Mona
 
     } yield FileName(freshName)
 
-  // Ingres accepts double quotes as part of identifiers, but they must
-  // be repeated twice. So we duplicate all quotes
-  // More details:
-  // https://docs.actian.com/avalanche/index.html#page/SQLLanguage%2FRegular_and_Delimited_Identifiers.htm%23ww414482
-  private def escapeIdent(ident: String): String = {
-    val escaped = ident.replace("\"", "\"\"")
-
-    s""""$escaped""""
-  }
-
-
   private def removeSingleQuotes(str: String): String =
     str.replace("'", "")
 
@@ -188,86 +180,11 @@ final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: Mona
       case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
     }
 
-  private def ensureValidColumns(columns: NonEmptyList[Column[ColumnType.Scalar]])
-      : Either[String, NonEmptyList[Fragment]] =
-    columns.traverse(mkColumn(_)).toEither leftMap { errs =>
-      s"Some column types are not supported: ${mkErrorString(errs)}"
-    }
-
-  private def copyQuery(tableName: String, fileName: FileName): Fragment = {
-    val clientId = removeSingleQuotes(config.azureCredentials.clientId.value)
-    val clientSecret = removeSingleQuotes(config.azureCredentials.clientSecret.value)
-
-    fr"COPY" ++ Fragment.const0(tableName) ++ fr0"() VWLOAD FROM " ++ abfsPath(fileName) ++
-      fr"WITH" ++ pairs(
-      fr"AZURE_CLIENT_ENDPOINT" -> authEndpoint(config.azureCredentials.tenantId),
-      fr"AZURE_CLIENT_ID" -> Fragment.const(s"'$clientId'"),
-      fr"AZURE_CLIENT_SECRET" -> Fragment.const(s"'$clientSecret'"),
-      fr"FDELIM" -> fr"','",
-      fr"QUOTE" -> fr"""'"'""")
-  }
-
-  private def authEndpoint(tid: TenantId): Fragment = {
+  private def authEndpoint(tid: TenantId): String = {
     val tenant = removeSingleQuotes(tid.value)
-
-    Fragment.const(s"'https://login.microsoftonline.com/$tenant/oauth2/token'")
+    
+    s"https://login.microsoftonline.com/$tenant/oauth2/token"
   }
-
-  private def pairs(ps: (Fragment, Fragment)*): Fragment =
-    (ps map {
-      case (lhs, rhs) => lhs ++ fr"=" ++ rhs
-    }).toList.intercalate(fr",")
-
-  private def abfsPath(file: FileName): Fragment = {
-    val container = config.containerName.value
-    val account = config.accountName.value
-    val fileName = file.value
-
-    Fragment.const(
-      s"'abfs://$container@$account.dfs.core.windows.net/$fileName'")
-  }
-
-  private def createTableQuery(tableName: String, columns: NonEmptyList[Fragment]): Fragment =
-    fr"CREATE TABLE" ++ Fragment.const(tableName) ++
-      Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
-
-  private def dropTableQuery(tableName: String): Fragment =
-    fr"DROP TABLE IF EXISTS" ++ Fragment.const(tableName)
-
-  private def truncateTableQuery(tableName: String): Fragment =
-    fr"MODIFY" ++ Fragment.const(tableName) ++ fr"TO TRUNCATED"
-
-  private def existanceTableQuery(tableName: String): Fragment = {
-    val table = tableName.toLowerCase.substring(1, tableName.length() - 1)
-
-    fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'"
-  }
-
-  private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
-    errs
-      .map(err => s"Column of type ${err.show} is not supported by Avalanche")
-      .intercalate(", ")
-
-  private def mkColumn(c: Column[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, Fragment] =
-    columnTypeToAvalanche(c.tpe).map(Fragment.const(escapeIdent(c.name)) ++ _)
-
-  private def columnTypeToAvalanche(ct: ColumnType.Scalar)
-      : ValidatedNel[ColumnType.Scalar, Fragment] =
-    ct match {
-      case ColumnType.Null => fr0"INTEGER1".validNel
-      case ColumnType.Boolean => fr0"BOOLEAN".validNel
-      case ColumnType.LocalTime => fr0"TIME(3)".validNel
-      case ColumnType.OffsetTime => fr0"TIME(3) WITH TIME ZONE".validNel
-      case ColumnType.LocalDate => fr0"ANSIDATE".validNel
-      case od @ ColumnType.OffsetDate => od.invalidNel
-      case ColumnType.LocalDateTime => fr0"TIMESTAMP(3)".validNel
-      case ColumnType.OffsetDateTime => fr0"TIMESTAMP(3) WITH TIME ZONE".validNel
-      // Avalanche supports intervals, but not ISO 8601 intervals, which is what
-      // Quasar produces
-      case i @ ColumnType.Interval => i.invalidNel
-      case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
-      case ColumnType.String => fr0"NVARCHAR(512)".validNel
-    }
 
   private def debug(msg: String): F[Unit] =
     Sync[F].delay(log.debug(msg))

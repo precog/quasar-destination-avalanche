@@ -16,53 +16,43 @@
 
 package quasar.destination.avalanche.s3
 
-import cats.data.{ValidatedNel, NonEmptyList}
+import quasar.destination.avalanche.AvalancheQueries._
+
+import cats.data.NonEmptyList
 import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.implicits._
 import doobie._
 import doobie.free.connection.createStatement
 import doobie.implicits._
 import fs2.{compression, Stream}
-import java.time.format.DateTimeFormatter
 import java.util.UUID
+import java.net.URI
 import org.slf4s.Logging
 import pathy.Path.FileName
 import quasar.api.destination.DestinationType
-import quasar.api.resource._
-import quasar.api.{Column, ColumnType}
+import quasar.api.ColumnType
 import quasar.blobstore.services.{DeleteService, PutService}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 import quasar.connector.destination.{LegacyDestination, ResultSink}
-import quasar.connector.render.RenderConfig
-import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.connector.MonadResourceErr
 import quasar.destination.avalanche.WriteMode._
 import scala.{
-  Either,
   Int,
   List,
   RuntimeException,
+  Seq,
   Some,
   StringContext,
   Unit
  }
-import scala.Predef.{String, ArrowAssoc}
+import scala.Predef.String
 import scala.util.matching.Regex
-
-final case class TableName(value: String)
 
 final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     deleteService: DeleteService[F],
     put: PutService[F],
     config: AvalancheS3Config,
     xa: Transactor[F]) extends LegacyDestination[F] with Logging {
-
-  private val AvalancheRenderConfig = RenderConfig.Csv(
-    includeHeader = false,
-    offsetDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS xxx"),
-    offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
-    localDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS"),
-    localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd"),
-    localTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
 
   def destinationType: DestinationType =
     AvalancheS3DestinationModule.destinationType
@@ -75,7 +65,7 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
       case (path, columns, bytes) => Stream.force(
         for {
           cols <- Sync[F].fromEither(ensureValidColumns(columns).leftMap(new RuntimeException(_)))
-          tableName <- ensureValidTableName(path)
+          tableName <- ensureValidTableName[F](path)
           compressed = bytes.through(compression.gzip(bufferSize = 1024 * 32))
           suffix <- Sync[F].delay(UUID.randomUUID().toString)
           freshName = s"precog-$suffix.gz"
@@ -83,14 +73,14 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
           _ <- put((uploadPath, compressed))
           pushF = push(tableName, cols, FileName(freshName))
           pushS = Stream.eval(pushF).onFinalize(deleteFile(uploadPath))
-        } yield pushS)
+        } yield pushS )
     }
 
   private def deleteFile(path: BlobPath): F[Unit] =
     deleteService(path).void
 
   private def push(
-      tableName: TableName,
+      tableName: String,
       cols: NonEmptyList[Fragment],
       freshName: FileName)
       : F[Unit] = {
@@ -103,7 +93,13 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
 
     val createQuery = createTableQuery(tableName, cols).update
 
-    val loadQuery = copyQuery(tableName, freshName).update
+    val bucketCfg = config.bucketConfig
+    val auth = Seq[(String, String)](
+      ("AWS_ACCESS_KEY", bucketCfg.accessKey.value),
+      ("AWS_SECRET_KEY", bucketCfg.secretKey.value))
+    val stagingUri = URI.create(s"s3a://${bucketCfg.bucket.value}/${freshName.value}")
+
+    val loadQuery = copyQuery(tableName, freshName.value, stagingUri, auth).update
 
     for {
       _ <- debug(s"Table creation query:\n${createQuery.sql}")
@@ -139,102 +135,6 @@ final class AvalancheS3Destination[F[_]: ConcurrentEffect: ContextShift: MonadRe
 
     } yield ()
   }
-
-  // Ingres accepts double quotes as part of identifiers, but they must
-  // be repeated twice. So we duplicate all quotes
-  // More details:
-  // https://docs.actian.com/avalanche/index.html#page/SQLLanguage%2FRegular_and_Delimited_Identifiers.htm%23ww414482
-  private def escapeIdent(ident: String): String = {
-    val escaped = ident.replace("\"", "\"\"")
-    s""""$escaped""""
-  }
-
-  private def ensureValidTableName(r: ResourcePath): F[TableName] =
-    r match {
-      case file /: ResourcePath.Root => TableName(escapeIdent(file)).pure[F]
-      case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
-    }
-
-  private def ensureValidColumns(columns: NonEmptyList[Column[ColumnType.Scalar]])
-      : Either[String, NonEmptyList[Fragment]] =
-    columns.traverse(mkColumn(_)).toEither leftMap { errs =>
-      s"Some column types are not supported: ${mkErrorString(errs)}"
-    }
-
-  private def copyQuery(tableName: TableName, fileName: FileName): Fragment = {
-    val table = tableName.value
-    val auth = config.bucketConfig
-    val akey = auth.accessKey
-    val skey = auth.secretKey
-
-    fr"COPY" ++ Fragment.const0(table) ++ fr0"() VWLOAD FROM " ++ s3Path(fileName) ++
-      fr"WITH" ++ pairs(
-      fr"AWS_ACCESS_KEY" -> Fragment.const(s"'${akey.value}'"),
-      fr"AWS_SECRET_KEY" -> Fragment.const(s"'${skey.value}'"),
-      fr"FDELIM" -> fr"','",
-      fr"QUOTE" -> fr"""'"'""") ++ fr", AUTO_DETECT_COMPRESSION"
-  }
-
-  private def pairs(ps: (Fragment, Fragment)*): Fragment =
-    (ps map {
-      case (lhs, rhs) => lhs ++ fr"=" ++ rhs
-    }).toList.intercalate(fr",")
-
-  private def s3Path(file: FileName): Fragment = {
-    val bucket = config.bucketConfig.bucket
-    val bucketName = bucket.value
-    val fileName = file.value
-    Fragment.const(s"'s3a://$bucketName/$fileName'")
-  }
-
-  private def createTableQuery(tableName: TableName, columns: NonEmptyList[Fragment]): Fragment = {
-    fr"CREATE TABLE" ++ Fragment.const(tableName.value) ++
-      Fragments.parentheses(columns.intercalate(fr",")) ++ fr"with nopartition"
-  }
-
-  private def dropTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.value
-
-    fr"DROP TABLE IF EXISTS" ++ Fragment.const(table)
-  }
-
-  private def truncateTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.value
-
-    fr"MODIFY" ++ Fragment.const(table) ++ fr"TO TRUNCATED"
-  }
-
-  private def existanceTableQuery(tableName: TableName): Fragment = {
-    val table = tableName.value.toLowerCase.substring(1, tableName.value.length()-1)
-
-    fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'"
-  }
-
-  private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
-    errs
-      .map(err => s"Column of type ${err.show} is not supported by Avalanche")
-      .intercalate(", ")
-
-  private def mkColumn(c: Column[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, Fragment] =
-    columnTypeToAvalanche(c.tpe).map(Fragment.const(escapeIdent(c.name)) ++ _)
-
-  private def columnTypeToAvalanche(ct: ColumnType.Scalar)
-      : ValidatedNel[ColumnType.Scalar, Fragment] =
-    ct match {
-      case ColumnType.Null => fr0"INTEGER1".validNel
-      case ColumnType.Boolean => fr0"BOOLEAN".validNel
-      case ColumnType.LocalTime => fr0"TIME(3)".validNel
-      case ColumnType.OffsetTime => fr0"TIME(3) WITH TIME ZONE".validNel
-      case ColumnType.LocalDate => fr0"ANSIDATE".validNel
-      case od @ ColumnType.OffsetDate => od.invalidNel
-      case ColumnType.LocalDateTime => fr0"TIMESTAMP(3)".validNel
-      case ColumnType.OffsetDateTime => fr0"TIMESTAMP(3) WITH TIME ZONE".validNel
-      // Avalanche supports intervals, but not ISO 8601 intervals, which is what
-      // Quasar produces
-      case i @ ColumnType.Interval => i.invalidNel
-      case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
-      case ColumnType.String => fr0"NVARCHAR(512)".validNel
-    }
 
   private def debug(msg: String): F[Unit] =
     Sync[F].delay(log.debug(msg))

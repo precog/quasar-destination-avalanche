@@ -31,22 +31,17 @@ import scala.Predef.String
 
 final case class ClusterPassword(value: String)
 
-// sealed trait Authorization
-// object Authorization {
-//   final case class Keys(accessKey: AccessKey, secretKey: SecretKey, region: Region) extends Authorization
-// }
-
 final case class BucketConfig(
-  bucket: Bucket,
-  accessKey: AccessKey,
-  secretKey: SecretKey,
-  region: Region)
+    bucket: Bucket,
+    accessKey: AccessKey,
+    secretKey: SecretKey,
+    region: Region)
 
 final case class AvalancheS3Config(
-  bucketConfig: BucketConfig,
-  connectionUri: URI,
-  password: ClusterPassword,
-  writeMode: WriteMode)
+    bucketConfig: BucketConfig,
+    connectionUri: URI,
+    password: ClusterPassword,
+    writeMode: WriteMode)
 
 object AvalancheS3Config {
 

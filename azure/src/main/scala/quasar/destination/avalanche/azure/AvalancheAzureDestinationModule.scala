@@ -16,19 +16,19 @@
 
 package quasar.destination.avalanche.azure
 
-import scala.Predef.String
+import quasar.destination.avalanche.TransactorPools._
 
-import scala.{
-  Int,
-  StringContext
+import argonaut._, Argonaut._
+import cats.data.EitherT
+import cats.effect.{
+  ConcurrentEffect,
+  ContextShift,
+  Resource,
+  Sync,
+  Timer
 }
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import scala.util.{Either, Random}
-
-import java.util.concurrent.Executors
-
+import eu.timepit.refined.auto._
+import doobie.hikari.HikariTransactor
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.azure.{
@@ -40,16 +40,12 @@ import quasar.blobstore.azure.{
 }
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, DestinationModule}
-import quasar.{concurrent => qc}
-
-import argonaut._, Argonaut._
-
-import cats.data.EitherT
-import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
-
-import eu.timepit.refined.auto._
-
-import doobie.hikari.HikariTransactor
+import scala.{
+  Int,
+  StringContext
+}
+import scala.concurrent.duration._
+import scala.util.{Either, Random}
 
 object AvalancheAzureDestinationModule extends DestinationModule {
   val IngresDriverFqcn = "com.ingres.jdbc.IngresDriver"
@@ -103,21 +99,6 @@ object AvalancheAzureDestinationModule extends DestinationModule {
         new AvalancheAzureDestination[F](transactor, refContainerClient, refresh, cfg)
 
     } yield dest).value
-
-  private def boundedPool[F[_]: Sync](name: String, threadCount: Int): Resource[F, ExecutionContext] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newFixedThreadPool(
-          threadCount,
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(ExecutionContext.fromExecutor(_))
-
-  private def unboundedPool[F[_]: Sync](name: String): Resource[F, Blocker] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newCachedThreadPool(
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(es => qc.Blocker(ExecutionContext.fromExecutor(es)))
 }
 
 

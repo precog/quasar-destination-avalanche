@@ -16,13 +16,21 @@
 
 package quasar.destination.avalanche.s3
 
+import quasar.destination.avalanche.TransactorPools._
+
 import argonaut._, Argonaut._
 import cats.data.EitherT
-import cats.effect.{Blocker, Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{
+  Concurrent,
+  ConcurrentEffect,
+  ContextShift,
+  Resource,
+  Sync,
+  Timer
+}
 import cats.implicits._
 import doobie.hikari.HikariTransactor
 import eu.timepit.refined.auto._
-import java.util.concurrent.Executors
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.s3.{
@@ -37,16 +45,12 @@ import quasar.blobstore.s3.{
 import quasar.blobstore.BlobstoreStatus
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, DestinationModule}
-import quasar.{concurrent => qc}
-
 import scala.{
   Int,
   StringContext,
   Unit
 }
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.Predef.String
 import scala.util.{Either, Random}
 import scalaz.NonEmptyList
 import software.amazon.awssdk.services.s3.S3AsyncClient
@@ -116,25 +120,10 @@ object AvalancheS3DestinationModule extends DestinationModule {
 
     } yield dest).value
 
-  private def boundedPool[F[_]: Sync](name: String, threadCount: Int): Resource[F, ExecutionContext] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newFixedThreadPool(
-          threadCount,
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(ExecutionContext.fromExecutor(_))
-
-  private def unboundedPool[F[_]: Sync](name: String): Resource[F, Blocker] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newCachedThreadPool(
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(es => qc.Blocker(ExecutionContext.fromExecutor(es)))
-
   private def validBucket[F[_]: Concurrent: ContextShift](
-    client: S3AsyncClient,
-    config: Json,
-    bucket: Bucket)
+      client: S3AsyncClient,
+      config: Json,
+      bucket: Bucket)
       : F[Either[InitializationError[Json], Unit]] = {
     S3StatusService(client, bucket) map {
       case BlobstoreStatus.Ok =>
@@ -154,7 +143,7 @@ object AvalancheS3DestinationModule extends DestinationModule {
             (destinationType, config, NonEmptyList(msg)))
           .asLeft
     }
-      }
+  }
 
   private def s3Client[F[_]: Concurrent](
     accessKey: AccessKey,
