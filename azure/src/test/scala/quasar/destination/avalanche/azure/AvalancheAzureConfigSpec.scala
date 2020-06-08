@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche
+package quasar.destination.avalanche.azure
 
 import argonaut._, Argonaut._
 import java.net.URI
@@ -22,8 +22,8 @@ import org.specs2.mutable.Specification
 import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
 import quasar.destination.avalanche.WriteMode._
 
-object AvalancheConfigSpec extends Specification {
-  "encodes and decodes a valid config without write mode" >> {
+object AvalancheAzureConfigSpec extends Specification {
+  "avalanche-azure encodes and decodes a valid config without write mode" >> {
     val initialJson = Json.obj(
       "accountName" := "foo",
       "containerName" := "bar",
@@ -34,8 +34,8 @@ object AvalancheConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    initialJson.as[AvalancheConfig].result must beRight(
-      AvalancheConfig(
+    initialJson.as[AvalancheAzureConfig].result must beRight(
+      AvalancheAzureConfig(
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
@@ -47,7 +47,7 @@ object AvalancheConfigSpec extends Specification {
           ClientSecret("client-secret-string"))))
   }
 
-  "parses and prints a valid config with write mode" >> {
+  "avalanche-azure parses and prints a valid config with write mode" >> {
     val initialJson = Json.obj(
       "accountName" := "foo",
       "containerName" := "bar",
@@ -59,8 +59,8 @@ object AvalancheConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    initialJson.as[AvalancheConfig].result must beRight(
-      AvalancheConfig(
+    initialJson.as[AvalancheAzureConfig].result must beRight(
+      AvalancheAzureConfig(
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),

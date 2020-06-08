@@ -16,7 +16,9 @@
 
 package quasar.destination.avalanche
 
-import slamdata.Predef.{Eq => _, _}
+import scala.Predef.String
+import scala.Product
+import scala.Serializable
 
 import argonaut._, Argonaut._
 

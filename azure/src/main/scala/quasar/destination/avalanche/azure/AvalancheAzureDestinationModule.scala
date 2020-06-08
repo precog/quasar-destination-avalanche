@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche
+package quasar.destination.avalanche.azure
 
-import scala.Predef._
-import scala._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import scala.util.{Either, Random}
+import quasar.destination.avalanche.TransactorPools._
 
-import java.util.concurrent.Executors
-
+import argonaut._, Argonaut._
+import cats.data.EitherT
+import cats.effect.{
+  ConcurrentEffect,
+  ContextShift,
+  Resource,
+  Sync,
+  Timer
+}
+import eu.timepit.refined.auto._
+import doobie.hikari.HikariTransactor
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.azure.{
@@ -35,18 +40,14 @@ import quasar.blobstore.azure.{
 }
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, DestinationModule}
-import quasar.{concurrent => qc}
+import scala.{
+  Int,
+  StringContext
+}
+import scala.concurrent.duration._
+import scala.util.{Either, Random}
 
-import argonaut._, Argonaut._
-
-import cats.data.EitherT
-import cats.effect.{Blocker, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
-
-import eu.timepit.refined.auto._
-
-import doobie.hikari.HikariTransactor
-
-object AvalancheDestinationModule extends DestinationModule {
+object AvalancheAzureDestinationModule extends DestinationModule {
   val IngresDriverFqcn = "com.ingres.jdbc.IngresDriver"
   // Avalanche closes the connection after 4 minutes so we set a connection lifetime of 3 minutes.
   val MaxLifetime = 3.minutes
@@ -54,10 +55,10 @@ object AvalancheDestinationModule extends DestinationModule {
   val PoolSize: Int = 10
 
   def destinationType: DestinationType =
-    DestinationType("avalanche", 1L)
+    DestinationType("avalanche-azure", 1L)
 
   def sanitizeDestinationConfig(config: Json): Json =
-    config.as[AvalancheConfig].result.fold(_ => Json.jEmptyObject, cfg =>
+    config.as[AvalancheAzureConfig].result.fold(_ => Json.jEmptyObject, cfg =>
       cfg.copy(
         azureCredentials =
           AzureCredentials.ActiveDirectory(
@@ -70,7 +71,7 @@ object AvalancheDestinationModule extends DestinationModule {
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
     config: Json): Resource[F, Either[InitializationError[Json], Destination[F]]] =
     (for {
-      cfg <- EitherT.fromEither[Resource[F, ?]](config.as[AvalancheConfig].result) leftMap {
+      cfg <- EitherT.fromEither[Resource[F, ?]](config.as[AvalancheAzureConfig].result) leftMap {
         case (err, _) => DestinationError.malformedConfiguration((destinationType, config, err))
       }
       poolSuffix <- EitherT.right(Resource.liftF(Sync[F].delay(Random.alphanumeric.take(5).mkString)))
@@ -92,25 +93,12 @@ object AvalancheDestinationModule extends DestinationModule {
           transactor.configure(ds => Sync[F].delay(ds.setMaxLifetime(MaxLifetime.toMillis)))))
 
       (refContainerClient, refresh) <- EitherT.right[InitializationError[Json]](
-        Resource.liftF(Azure.refContainerClient(AvalancheConfig.toConfig(cfg))))
+        Resource.liftF(Azure.refContainerClient(AvalancheAzureConfig.toConfig(cfg))))
 
       dest: Destination[F] =
-        new AvalancheDestination[F](transactor, refContainerClient, refresh, cfg)
+        new AvalancheAzureDestination[F](transactor, refContainerClient, refresh, cfg)
 
     } yield dest).value
-
-  private def boundedPool[F[_]: Sync](name: String, threadCount: Int): Resource[F, ExecutionContext] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newFixedThreadPool(
-          threadCount,
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(ExecutionContext.fromExecutor(_))
-
-  private def unboundedPool[F[_]: Sync](name: String): Resource[F, Blocker] =
-    Resource.make(
-      Sync[F].delay(
-        Executors.newCachedThreadPool(
-          qc.NamedDaemonThreadFactory(name))))(es => Sync[F].delay(es.shutdown()))
-      .map(es => qc.Blocker(ExecutionContext.fromExecutor(es)))
 }
+
+

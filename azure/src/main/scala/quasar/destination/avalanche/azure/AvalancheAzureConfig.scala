@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche
+package quasar.destination.avalanche.azure
 
-import scala.Predef._
-
+import argonaut._, Argonaut._
+import cats.implicits._
 import java.net.{URI, URISyntaxException}
-import scala._
 import quasar.blobstore.azure.{
   AccountName,
   AzureCredentials,
@@ -31,15 +30,18 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
-import quasar.destination.avalanche.WriteMode._
-
-import argonaut._, Argonaut._
-
-import cats.implicits._
+import quasar.destination.avalanche.WriteMode, WriteMode._
+import scala.{
+  Either, 
+  None, 
+  Option, 
+  StringContext
+}
+import scala.Predef.String
 
 final case class ClusterPassword(value: String)
 
-final case class AvalancheConfig(
+final case class AvalancheAzureConfig(
   accountName: AccountName,
   containerName: ContainerName,
   connectionUri: URI,
@@ -47,8 +49,8 @@ final case class AvalancheConfig(
   writeMode: WriteMode,
   azureCredentials: AzureCredentials.ActiveDirectory)
 
-object AvalancheConfig {
-  def toConfig(config: AvalancheConfig): Config =
+object AvalancheAzureConfig {
+  def toConfig(config: AvalancheAzureConfig): Config =
     DefaultConfig(
       config.containerName,
       config.azureCredentials.some,
@@ -80,8 +82,8 @@ object AvalancheConfig {
       ad => (ad.clientId.value, ad.tenantId.value, ad.clientSecret.value).some)(
       "clientId", "tenantId", "clientSecret")
 
-  implicit def AvalancheConfigCodecJson: CodecJson[AvalancheConfig] =
-    CodecJson({ (c: AvalancheConfig) =>
+  implicit def AvalancheAzureConfigCodecJson: CodecJson[AvalancheAzureConfig] =
+    CodecJson({ (c: AvalancheAzureConfig) =>
         ("accountName" := c.accountName.value) ->:
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
@@ -97,7 +99,7 @@ object AvalancheConfig {
          clusterPassword <- (c --\ "clusterPassword").as[String]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
-       } yield AvalancheConfig(
+       } yield AvalancheAzureConfig(
          AccountName(accountName),
          ContainerName(containerName),
          connectionUri,
