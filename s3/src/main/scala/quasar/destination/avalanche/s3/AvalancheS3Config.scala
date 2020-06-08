@@ -27,7 +27,7 @@ import quasar.blobstore.s3.{
 }
 import quasar.destination.avalanche.WriteMode, WriteMode._
 import scala.{Either, StringContext}
-import scala.Predef.String
+import scala.Predef._
 
 final case class ClusterPassword(value: String)
 
@@ -40,7 +40,7 @@ final case class BucketConfig(
 final case class AvalancheS3Config(
     bucketConfig: BucketConfig,
     connectionUri: URI,
-    password: ClusterPassword,
+    clusterPassword: ClusterPassword,
     writeMode: WriteMode)
 
 object AvalancheS3Config {
@@ -56,20 +56,38 @@ object AvalancheS3Config {
           DecodeResult.ok(_))
       } yield uri)
 
-  private implicit val bucketConfigCodecJson: CodecJson[BucketConfig] =
-    casecodec4[String, String, String, String, BucketConfig](
-      (bucket, accessKey, secretKey, region) =>
-        BucketConfig(Bucket(bucket), AccessKey(accessKey), SecretKey(secretKey), Region(region)),
-      bc => (bc.bucket.value, bc.accessKey.value, bc.secretKey.value, bc.region.value).some)(
-        "bucket", "accessKey", "secretKey", "region")
+  private implicit val bucketConfigCodecJson: CodecJson[BucketConfig] = {
+    val encode: BucketConfig => Json = {
+      case BucketConfig(Bucket(bucket), AccessKey(accessKey), SecretKey(secretKey), Region(region)) =>
+        Json(
+          "bucket" -> jString(bucket),
+          "credentials" -> Json(
+            "accessKey" -> jString(accessKey),
+            "secretKeys" -> jString(secretKey),
+            "region" -> jString(region)))
+    }
+
+    val decode: HCursor => DecodeResult[BucketConfig] = { root =>
+      for {
+        bucket <- (root --\ "bucket").as[String]
+
+        creds = root --\ "credentials"
+        accessKey <- (creds --\ "accessKey").as[String]
+        secretKey <- (creds --\ "secretKey").as[String]
+        region <- (creds --\ "region").as[String]
+      } yield BucketConfig(Bucket(bucket), AccessKey(accessKey), SecretKey(secretKey), Region(region))
+    }
+
+    CodecJson[BucketConfig](encode, decode)
+  }
 
   implicit def avalancheConfigCodecJson: CodecJson[AvalancheS3Config] =
     casecodec4[BucketConfig, URI, String, WriteMode, AvalancheS3Config](
-      (bucketCfg, uri, password, writeMode) =>
+      (bucketCfg, uri, clusterPassword, writeMode) =>
         AvalancheS3Config(BucketConfig(bucketCfg.bucket, bucketCfg.accessKey, bucketCfg.secretKey, bucketCfg.region),
         uri,
-        ClusterPassword(password.value),
+        ClusterPassword(clusterPassword.value),
         writeMode),
-      asc => (asc.bucketConfig, asc.connectionUri, asc.password.value, asc.writeMode).some)(
-      "bucketConfig", "jdbcUri", "password", "writemode")
+      asc => (asc.bucketConfig, asc.connectionUri, asc.clusterPassword.value, asc.writeMode).some)(
+      "bucketConfig", "connectionUri", "clusterPassword", "writeMode")
 }

@@ -27,20 +27,21 @@ object AvalancheS3ConfigSpec extends Specification {
     val initialJson = Json.obj(
       "bucketConfig" := Json.obj(
         "bucket" := "bucket-name",
-        "accessKey" := "aws-access-key",
-        "secretKey" := "aws-secret-key",
-        "region" := "us-east-1"),
-      "jdbcUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
-      "password" := "mypassword",
-      "writemode" := "create")
+        "credentials" := Json.obj(
+          "accessKey" := "aws-access-key",
+          "secretKey" := "aws-secret-key",
+          "region" := "us-east-1")),
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "clusterPassword" := "mypassword",
+      "writeMode" := "create")
 
     initialJson.as[AvalancheS3Config].result must beRight(
       AvalancheS3Config(
         BucketConfig(
-              Bucket("bucket-name"),
-              AccessKey("aws-access-key"),
-              SecretKey("aws-secret-key"),
-              Region("us-east-1")),
+          Bucket("bucket-name"),
+          AccessKey("aws-access-key"),
+          SecretKey("aws-secret-key"),
+          Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("mypassword"),
         Create))
@@ -50,12 +51,13 @@ object AvalancheS3ConfigSpec extends Specification {
     val initialJson = Json.obj(
       "bucketConfig" := Json.obj(
         "bucket" := "bucket-name",
-        "accessKey" := "aws-access-key",
-        "secretKey" := "aws-secret-key",
-        "region" := "us-east-1"),
-      "jdbcUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
-      "password" := "super secret",
-      "writemode" := "truncate")
+        "credentials" := Json.obj(
+          "accessKey" := "aws-access-key",
+          "secretKey" := "aws-secret-key",
+          "region" := "us-east-1")),
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "clusterPassword" := "super secret",
+      "writeMode" := "truncate")
 
     initialJson.as[AvalancheS3Config].result must beRight(
       AvalancheS3Config(

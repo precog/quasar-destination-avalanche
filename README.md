@@ -58,9 +58,9 @@ Configuration format for Avalanche with S3 staging is:
 ```json
 {
   "bucketConfig": Object,
-  "jdbcUri": String,
-  "password": String,
-  "writemode": "create" | "replace" | "truncate",
+  "connectionUri": String,
+  "clusterPassword": String,
+  "writeMode": "create" | "replace" | "truncate",
 }
 ```
 
@@ -69,9 +69,11 @@ Where `bucketConfig` has this format:
 ```json
 {
   "bucket": String,
-  "accessKey": String,
-  "secretKey": String,
-  "region": String
+  "credentials": {
+    "accessKey": String,
+    "secretKey": String,
+    "region": String
+  }
 }
 ```
 
@@ -81,12 +83,15 @@ Example:
 {
   "bucketConfig": {
     "bucket": "bucket-name",
-    "accessKey": "aws-access-key",
-    "secretKey": "aws-secret-key",
-    "region": "aws-bucket-region"},
-  "jdbcUri": "jdbc:ingres://<avalanche-cluster-domain>:27839/db;encryption=on",
-  "password": "avalanche-cluster-password",
-  "writemode": "create"
+    "credentials": {
+      "accessKey": "aws-access-key",
+      "secretKey": "aws-secret-key",
+      "region": "aws-bucket-region"
+    }
+  },
+  "connectionUri": "jdbc:ingres://<avalanche-cluster-domain>:27839/db;encryption=on",
+  "clusterPassword": "avalanche-cluster-password",
+  "writeMode": "create"
 }
 ```
 

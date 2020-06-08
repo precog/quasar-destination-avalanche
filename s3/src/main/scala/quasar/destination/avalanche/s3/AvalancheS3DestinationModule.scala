@@ -69,9 +69,9 @@ object AvalancheS3DestinationModule extends DestinationModule {
     DestinationType("avalanche-s3", 1L)
 
   def sanitizeDestinationConfig(config: Json): Json =
-    config.as[AvalancheS3Config].result.fold(_ => Json.jEmptyObject, cfg => 
+    config.as[AvalancheS3Config].result.fold(_ => Json.jEmptyObject, cfg =>
       cfg.copy(
-        password =
+        clusterPassword =
           ClusterPassword(Redacted),
         bucketConfig =
           BucketConfig(
@@ -87,7 +87,7 @@ object AvalancheS3DestinationModule extends DestinationModule {
         case (err, _) => DestinationError.malformedConfiguration((destinationType, config, err))
       }
 
-      jdbcUri = cfg.connectionUri.toString
+      connectionUri = cfg.connectionUri.toString
 
       xa <- EitherT.right(for {
         poolSuffix <- Resource.liftF(Sync[F].delay(Random.alphanumeric.take(5).mkString))
@@ -95,9 +95,9 @@ object AvalancheS3DestinationModule extends DestinationModule {
         transactPool <- unboundedPool[F](s"avalanche-dest-transact-$poolSuffix")
         transactor <- HikariTransactor.newHikariTransactor[F](
           IngresDriverFqcn,
-          jdbcUri,
+          connectionUri,
           "dbuser",
-          cfg.password.value,
+          cfg.clusterPassword.value,
           connectPool,
           transactPool)
       } yield transactor)
