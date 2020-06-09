@@ -63,7 +63,7 @@ object AvalancheS3Config {
           "bucket" -> jString(bucket),
           "credentials" -> Json(
             "accessKey" -> jString(accessKey),
-            "secretKeys" -> jString(secretKey),
+            "secretKey" -> jString(secretKey),
             "region" -> jString(region)))
     }
 
