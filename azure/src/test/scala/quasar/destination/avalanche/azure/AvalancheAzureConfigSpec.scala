@@ -34,7 +34,7 @@ object AvalancheAzureConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    initialJson.as[AvalancheAzureConfig].result must beRight(
+    val cfg =
       AvalancheAzureConfig(
         AccountName("foo"),
         ContainerName("bar"),
@@ -44,7 +44,11 @@ object AvalancheAzureConfigSpec extends Specification {
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
-          ClientSecret("client-secret-string"))))
+          ClientSecret("client-secret-string")))
+
+    initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
   }
 
   "avalanche-azure parses and prints a valid config with write mode" >> {
@@ -59,7 +63,7 @@ object AvalancheAzureConfigSpec extends Specification {
         "tenantId" := "tenant-id-uuid",
         "clientSecret" := "client-secret-string"))
 
-    initialJson.as[AvalancheAzureConfig].result must beRight(
+    val cfg =
       AvalancheAzureConfig(
         AccountName("foo"),
         ContainerName("bar"),
@@ -69,6 +73,10 @@ object AvalancheAzureConfigSpec extends Specification {
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
           TenantId("tenant-id-uuid"),
-          ClientSecret("client-secret-string"))))
+          ClientSecret("client-secret-string")))
+
+    initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
   }
 }

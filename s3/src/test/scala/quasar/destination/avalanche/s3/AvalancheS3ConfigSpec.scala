@@ -23,7 +23,7 @@ import quasar.blobstore.s3._
 import quasar.destination.avalanche.WriteMode._
 
 object AvalancheS3ConfigSpec extends Specification {
-  "avalanche-s3 encodes and decodes a valid config without write mode" >> {
+  "avalanche-s3 encodes and decodes a valid config with write mode create" >> {
     val initialJson = Json.obj(
       "bucketConfig" := Json.obj(
         "bucket" := "bucket-name",
@@ -35,7 +35,7 @@ object AvalancheS3ConfigSpec extends Specification {
       "clusterPassword" := "mypassword",
       "writeMode" := "create")
 
-    initialJson.as[AvalancheS3Config].result must beRight(
+    val cfg =
       AvalancheS3Config(
         BucketConfig(
           Bucket("bucket-name"),
@@ -44,7 +44,11 @@ object AvalancheS3ConfigSpec extends Specification {
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("mypassword"),
-        Create))
+        Create)
+
+    initialJson.as[AvalancheS3Config].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
   }
 
   "avalanche-s3 parses and prints a valid config with write mode" >> {
@@ -59,7 +63,7 @@ object AvalancheS3ConfigSpec extends Specification {
       "clusterPassword" := "super secret",
       "writeMode" := "truncate")
 
-    initialJson.as[AvalancheS3Config].result must beRight(
+    val cfg =
       AvalancheS3Config(
         BucketConfig(
           Bucket("bucket-name"),
@@ -68,6 +72,10 @@ object AvalancheS3ConfigSpec extends Specification {
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         ClusterPassword("super secret"),
-        Truncate))
+        Truncate)
+
+    initialJson.as[AvalancheS3Config].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
   }
 }
