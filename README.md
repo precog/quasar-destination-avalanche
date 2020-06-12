@@ -24,6 +24,7 @@ has the following format:
   "accountName": String,
   "containerName": String,
   "connectionUri": String,
+  "username":String,
   "clusterPassword": String,
   "writeMode": "create" | "replace" | "truncate",
   "credentials": Object
@@ -35,7 +36,8 @@ has the following format:
 - `containerName` is the name of the container that will be used to
   stage files before loading into Avalanche
 - `connectionUri` is the JDBC URI provided by Actian
-- `clusterPassword` is the password for `dbuser`
+- `username` is the username
+- `clusterPassword` is the password associated with the username
 - `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
 - `credentials` specifies the Azure Active Directory configuration
 
@@ -59,6 +61,7 @@ Configuration format for Avalanche with S3 staging is:
 {
   "bucketConfig": Object,
   "connectionUri": String,
+  "username":String,
   "clusterPassword": String,
   "writeMode": "create" | "replace" | "truncate",
 }
@@ -90,6 +93,7 @@ Example:
     }
   },
   "connectionUri": "jdbc:ingres://<avalanche-cluster-domain>:27839/db;encryption=on",
+  "username": "dbuser",
   "clusterPassword": "avalanche-cluster-password",
   "writeMode": "create"
 }

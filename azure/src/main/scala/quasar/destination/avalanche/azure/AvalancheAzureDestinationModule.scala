@@ -84,7 +84,7 @@ object AvalancheAzureDestinationModule extends DestinationModule {
         HikariTransactor.newHikariTransactor[F](
           IngresDriverFqcn,
           jdbcUri,
-          "dbuser", // username is always dbuser
+          cfg.username.value,
           cfg.password.value,
           connectPool,
           transactPool))

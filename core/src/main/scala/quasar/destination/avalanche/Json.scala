@@ -18,7 +18,7 @@ package quasar.destination.avalanche
 
 import scala._
 
-import argonaut._, Argonaut._
+import argonaut._
 
 object Json {
   def decodeOrDefault[A](decodeJson: DecodeJson[A], defaultValue: A): DecodeJson[A] =
