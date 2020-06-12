@@ -86,6 +86,6 @@ lazy val s3 = project
       "com.precog" %% "async-blobstore-s3" % managedVersions.value("precog-async-blobstore")),
     excludeDependencies += "org.typelevel" % "scala-library",
     libraryDependencies ++= Seq(
-      "org.specs2" %% "specs2-core" % "4.8.3" % Test),
+      "org.specs2" %% "specs2-core" % "4.9.2" % Test),
     packageBin in Compile := (assembly in Compile).value)
   .enablePlugins(QuasarPlugin)
