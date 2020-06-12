@@ -96,7 +96,7 @@ object AvalancheS3DestinationModule extends DestinationModule {
         transactor <- HikariTransactor.newHikariTransactor[F](
           IngresDriverFqcn,
           connectionUri,
-          "dbuser",
+          cfg.username.value,
           cfg.clusterPassword.value,
           connectPool,
           transactPool)

@@ -25,10 +25,11 @@ import quasar.blobstore.s3.{
   Region,
   SecretKey
 }
-import quasar.destination.avalanche.WriteMode, WriteMode._
-import scala.{Either, StringContext}
+import quasar.destination.avalanche.{Json => J, WriteMode}, WriteMode._
+import scala._
 import scala.Predef._
 
+final case class Username(value: String)
 final case class ClusterPassword(value: String)
 
 final case class BucketConfig(
@@ -40,10 +41,19 @@ final case class BucketConfig(
 final case class AvalancheS3Config(
     bucketConfig: BucketConfig,
     connectionUri: URI,
+    username: Username,
     clusterPassword: ClusterPassword,
     writeMode: WriteMode)
 
 object AvalancheS3Config {
+
+  val DbUser: Username = Username("dbuser")
+
+  implicit val decodeUsername: DecodeJson[Username] = J.decodeOrDefault(jdecode1(Username(_)), DbUser)
+  implicit val decodeClusterPassword: DecodeJson[ClusterPassword] = jdecode1(ClusterPassword(_))
+
+  implicit val encodeUsername: EncodeJson[Username] = jencode1(_.value)
+  implicit val encodeClusterPassword: EncodeJson[ClusterPassword] = jencode1(_.value)
 
   private implicit val uriCodecJson: CodecJson[URI] =
     CodecJson(
@@ -82,12 +92,8 @@ object AvalancheS3Config {
   }
 
   implicit def avalancheConfigCodecJson: CodecJson[AvalancheS3Config] =
-    casecodec4[BucketConfig, URI, String, WriteMode, AvalancheS3Config](
-      (bucketCfg, uri, clusterPassword, writeMode) =>
-        AvalancheS3Config(BucketConfig(bucketCfg.bucket, bucketCfg.accessKey, bucketCfg.secretKey, bucketCfg.region),
-        uri,
-        ClusterPassword(clusterPassword.value),
-        writeMode),
-      asc => (asc.bucketConfig, asc.connectionUri, asc.clusterPassword.value, asc.writeMode).some)(
-      "bucketConfig", "connectionUri", "clusterPassword", "writeMode")
+    casecodec5[BucketConfig, URI, Username, ClusterPassword, WriteMode, AvalancheS3Config](
+      AvalancheS3Config.apply,
+      AvalancheS3Config.unapply)(
+      "bucketConfig", "connectionUri", "username", "clusterPassword", "writeMode")
 }

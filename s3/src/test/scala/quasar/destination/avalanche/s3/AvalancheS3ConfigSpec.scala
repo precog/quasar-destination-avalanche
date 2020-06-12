@@ -32,6 +32,7 @@ object AvalancheS3ConfigSpec extends Specification {
           "secretKey" := "aws-secret-key",
           "region" := "us-east-1")),
       "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "username" := "myuser",
       "clusterPassword" := "mypassword",
       "writeMode" := "create")
 
@@ -43,6 +44,7 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("myuser"),
         ClusterPassword("mypassword"),
         Create)
 
@@ -51,7 +53,7 @@ object AvalancheS3ConfigSpec extends Specification {
     cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
   }
 
-  "avalanche-s3 parses and prints a valid config with write mode" >> {
+  "avalanche-s3 parses and prints a valid legacy config without username" >> {
     val initialJson = Json.obj(
       "bucketConfig" := Json.obj(
         "bucket" := "bucket-name",
@@ -71,6 +73,37 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("dbuser"),
+        ClusterPassword("super secret"),
+        Truncate)
+
+    initialJson.as[AvalancheS3Config].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
+  }
+
+  "avalanche-s3 parses and prints a valid config" >> {
+    val initialJson = Json.obj(
+      "bucketConfig" := Json.obj(
+        "bucket" := "bucket-name",
+        "credentials" := Json.obj(
+          "accessKey" := "aws-access-key",
+          "secretKey" := "aws-secret-key",
+          "region" := "us-east-1")),
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "username" := "myuser",
+      "clusterPassword" := "super secret",
+      "writeMode" := "truncate")
+
+    val cfg =
+      AvalancheS3Config(
+        BucketConfig(
+          Bucket("bucket-name"),
+          AccessKey("aws-access-key"),
+          SecretKey("aws-secret-key"),
+          Region("us-east-1")),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("myuser"),
         ClusterPassword("super secret"),
         Truncate)
 
