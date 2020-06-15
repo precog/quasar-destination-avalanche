@@ -16,9 +16,9 @@
 
 package quasar.destination.avalanche.azure
 
-import argonaut._, Argonaut._
-import cats.implicits._
 import java.net.{URI, URISyntaxException}
+import scala._, Predef.String
+
 import quasar.blobstore.azure.{
   AccountName,
   AzureCredentials,
@@ -31,25 +31,26 @@ import quasar.blobstore.azure.{
   TenantId
 }
 import quasar.destination.avalanche.WriteMode, WriteMode._
-import scala.{
-  Either, 
-  None, 
-  Option, 
-  StringContext
-}
-import scala.Predef.String
 
+import argonaut._, Argonaut._
+import cats.implicits._
+
+final case class Username(value: String)
 final case class ClusterPassword(value: String)
 
 final case class AvalancheAzureConfig(
   accountName: AccountName,
   containerName: ContainerName,
   connectionUri: URI,
+  username: Username,
   password: ClusterPassword,
   writeMode: WriteMode,
   azureCredentials: AzureCredentials.ActiveDirectory)
 
 object AvalancheAzureConfig {
+
+  val DbUser: Username = Username("dbuser")
+
   def toConfig(config: AvalancheAzureConfig): Config =
     DefaultConfig(
       config.containerName,
@@ -87,6 +88,7 @@ object AvalancheAzureConfig {
         ("accountName" := c.accountName.value) ->:
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
+        ("username" := c.username.value) ->:
         ("clusterPassword" := c.password.value) ->:
         ("writeMode" := c.writeMode) ->:
         ("credentials" := c.azureCredentials) ->:
@@ -96,6 +98,7 @@ object AvalancheAzureConfig {
          accountName <- (c --\ "accountName").as[String]
          containerName <- (c --\ "containerName").as[String]
          connectionUri <- (c --\ "connectionUri").as[URI]
+         username <- (c --\ "username").as[Option[String]]
          clusterPassword <- (c --\ "clusterPassword").as[String]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
@@ -103,6 +106,7 @@ object AvalancheAzureConfig {
          AccountName(accountName),
          ContainerName(containerName),
          connectionUri,
+         username.fold(DbUser)(Username(_)),
          ClusterPassword(clusterPassword),
          writeMode.getOrElse(Replace),
          credentials)))
