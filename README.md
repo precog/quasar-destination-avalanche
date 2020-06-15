@@ -134,4 +134,3 @@ You must also create an IAM user, generate an AccessKey and SecretKey, and assig
 }
 ```
 
-
