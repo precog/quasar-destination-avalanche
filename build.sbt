@@ -10,7 +10,16 @@ scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/precog/quasar-destination-avalanche"),
   "scm:git@github.com:precog/quasar-destination-avalanche.git"))
 
-val DoobieVersion = "0.9.0"
+lazy val quasarVersion =
+  Def.setting[String](managedVersions.value("precog-quasar"))
+
+lazy val asyncBlobstoreVersion =
+  Def.setting[String](managedVersions.value("precog-async-blobstore"))
+
+lazy val quasarPluginJdbcVersion =
+  Def.setting[String](managedVersions.value("precog-quasar-plugin-jdbc"))
+
+lazy val specs2Version = "4.9.4"
 
 lazy val buildSettings = Seq(
   logBuffered in Test := githubIsWorkflowBuild.value)
@@ -19,7 +28,7 @@ lazy val buildSettings = Seq(
 lazy val publishTestsSettings = Seq(
   Test / packageBin / publishArtifact := true)
 
-lazy val commonSettings = buildSettings ++ publishTestsSettings //++ assemblySettings
+lazy val commonSettings = buildSettings ++ publishTestsSettings
 
 lazy val root = project
   .in(file("."))
@@ -35,12 +44,15 @@ lazy val core = project
     performMavenCentralSync := false,
     publishAsOSSProject := true,
     libraryDependencies ++= Seq(
-     "io.argonaut" %% "argonaut" % "6.3.0-M2",
-     "org.typelevel" %% "cats-core" % "2.1.0",
-     "org.tpolecat" %% "doobie-core" % DoobieVersion,
-     "com.precog" %% "quasar-api" % managedVersions.value("precog-quasar"),
-     "com.precog" %% "quasar-connector" % managedVersions.value("precog-quasar"),
-     "org.specs2" %% "specs2-core" % "4.8.3" % Test))
+      "com.precog" %% "async-blobstore-core" % asyncBlobstoreVersion.value,
+      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
+      "org.specs2" %% "specs2-core" % specs2Version % Test),
+    assemblyExcludedJars in assembly := {
+      val cp = (fullClasspath in assembly).value
+      cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
+    },
+    packageBin in Compile := (assembly in Compile).value)
 
 lazy val azure = project
   .in(file("azure"))
@@ -48,24 +60,15 @@ lazy val azure = project
   .settings(commonSettings)
   .settings(name := "quasar-destination-avalanche-azure")
   .settings(
-    assemblyExcludedJars in assembly := {
-      val cp = (fullClasspath in assembly).value
-
-      cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
-    },
     quasarPluginName := "avalanche-azure",
-    quasarPluginQuasarVersion := managedVersions.value("precog-quasar"),
+    quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.azure.AvalancheAzureDestinationModule$"),
     quasarPluginDependencies ++= Seq(
-      "org.slf4s" %% "slf4s-api" % "1.7.25",
-      "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
-      "com.precog" %% "async-blobstore-azure" % managedVersions.value("precog-async-blobstore")),
-    excludeDependencies += "org.typelevel" % "scala-library",
+      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "async-blobstore-azure" % asyncBlobstoreVersion.value),
     libraryDependencies ++= Seq(
-      "org.specs2" %% "specs2-core" % "4.8.3" % Test),
-    packageBin in Compile := (assembly in Compile).value)
+      "org.specs2" %% "specs2-core" % specs2Version % Test))
   .enablePlugins(QuasarPlugin)
-
 
 lazy val s3 = project
   .in(file("s3"))
@@ -73,19 +76,12 @@ lazy val s3 = project
   .settings(commonSettings)
   .settings(name := "quasar-destination-avalanche-s3")
   .settings(
-    assemblyExcludedJars in assembly := {
-      val cp = (fullClasspath in assembly).value
-      cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
-    },
     quasarPluginName := "avalanche-s3",
-    quasarPluginQuasarVersion := managedVersions.value("precog-quasar"),
+    quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.s3.AvalancheS3DestinationModule$"),
     quasarPluginDependencies ++= Seq(
-      "org.slf4s" %% "slf4s-api" % "1.7.25",
-      "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
-      "com.precog" %% "async-blobstore-s3" % managedVersions.value("precog-async-blobstore")),
-    excludeDependencies += "org.typelevel" % "scala-library",
+      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "async-blobstore-s3" % asyncBlobstoreVersion.value),
     libraryDependencies ++= Seq(
-      "org.specs2" %% "specs2-core" % "4.9.2" % Test),
-    packageBin in Compile := (assembly in Compile).value)
+      "org.specs2" %% "specs2-core" % specs2Version % Test))
   .enablePlugins(QuasarPlugin)

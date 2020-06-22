@@ -30,7 +30,8 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
-import quasar.destination.avalanche.WriteMode, WriteMode._
+import quasar.destination.avalanche.WriteMode
+import quasar.plugin.jdbc.Redacted
 
 import argonaut._, Argonaut._
 import cats.implicits._
@@ -39,13 +40,24 @@ final case class Username(value: String)
 final case class ClusterPassword(value: String)
 
 final case class AvalancheAzureConfig(
-  accountName: AccountName,
-  containerName: ContainerName,
-  connectionUri: URI,
-  username: Username,
-  password: ClusterPassword,
-  writeMode: WriteMode,
-  azureCredentials: AzureCredentials.ActiveDirectory)
+    accountName: AccountName,
+    containerName: ContainerName,
+    connectionUri: URI,
+    username: Username,
+    password: ClusterPassword,
+    writeMode: WriteMode,
+    azureCredentials: AzureCredentials.ActiveDirectory) {
+
+  def sanitized: AvalancheAzureConfig =
+    copy(
+      azureCredentials =
+        AzureCredentials.ActiveDirectory(
+          ClientId(Redacted),
+          TenantId(Redacted),
+          ClientSecret(Redacted)),
+      password =
+        ClusterPassword(Redacted))
+}
 
 object AvalancheAzureConfig {
 
@@ -108,6 +120,6 @@ object AvalancheAzureConfig {
          connectionUri,
          username.fold(DbUser)(Username(_)),
          ClusterPassword(clusterPassword),
-         writeMode.getOrElse(Replace),
+         writeMode.getOrElse(WriteMode.Replace),
          credentials)))
 }

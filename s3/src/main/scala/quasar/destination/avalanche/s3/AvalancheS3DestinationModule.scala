@@ -16,21 +16,29 @@
 
 package quasar.destination.avalanche.s3
 
-import quasar.destination.avalanche.TransactorPools._
+import quasar.destination.avalanche._
+
+import scala.{Int, Unit}
+import scala.util.{Either, Right}
+
+import java.lang.String
 
 import argonaut._, Argonaut._
-import cats.data.EitherT
+
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.{
   Concurrent,
   ConcurrentEffect,
   ContextShift,
   Resource,
-  Sync,
   Timer
 }
 import cats.implicits._
-import doobie.hikari.HikariTransactor
-import quasar.api.destination.DestinationError.InitializationError
+
+import doobie.Transactor
+
+import org.slf4s.Logger
+
 import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.s3.{
   S3DeleteService,
@@ -43,113 +51,103 @@ import quasar.blobstore.s3.{
 }
 import quasar.blobstore.BlobstoreStatus
 import quasar.connector.MonadResourceErr
-import quasar.connector.destination.{Destination, DestinationModule, PushmiPullyu}
-import scala.{
-  Int,
-  StringContext,
-  Unit
-}
-import scala.concurrent.duration._
-import scala.util.{Either, Random}
-import scalaz.NonEmptyList
+import quasar.connector.destination.{Destination, PushmiPullyu}
+import quasar.plugin.jdbc.TransactorConfig
+
+import scalaz.{NonEmptyList => ZNel}
+
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
 import software.amazon.awssdk.regions.{Region => AwsRegion}
 
-object AvalancheS3DestinationModule extends DestinationModule {
-  val IngresDriverFqcn = "com.ingres.jdbc.IngresDriver"
-  // Avalanche closes the connection after 4 minutes so we set a connection lifetime of 3 minutes.
-  val MaxLifetime = 3.minutes
-  val Redacted = "<REDACTED>"
-  val PoolSize: Int = 10
-  val PartSize = 10 * 1024 * 1024
+object AvalancheS3DestinationModule extends AvalancheDestinationModule[AvalancheS3Config] {
+  val PartSize: Int = 10 * 1024 * 1024 // 10MB
 
-  def destinationType: DestinationType =
+  val destinationType: DestinationType =
     DestinationType("avalanche-s3", 1L)
 
+  def transactorConfig(config: AvalancheS3Config): Either[NonEmptyList[String], TransactorConfig] =
+    Right(AvalancheTransactorConfig(
+      config.connectionUri,
+      config.username.value,
+      config.clusterPassword.value))
+
   def sanitizeDestinationConfig(config: Json): Json =
-    config.as[AvalancheS3Config].result.fold(_ => Json.jEmptyObject, cfg =>
-      cfg.copy(
-        clusterPassword =
-          ClusterPassword(Redacted),
-        bucketConfig =
-          BucketConfig(
-              Bucket(cfg.bucketConfig.bucket.value),
-              AccessKey(Redacted),
-              SecretKey(Redacted),
-              Region(Redacted))).asJson)
+    config.as[AvalancheS3Config].fold(
+      (_, _) => jEmptyObject,
+      _.sanitized.asJson)
 
-  def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-      config: Json,
-      pushPull: PushmiPullyu[F])
-      : Resource[F, Either[InitializationError[Json], Destination[F]]] =
-    (for {
-      cfg <- EitherT.fromEither[Resource[F, ?]](config.as[AvalancheS3Config].result) leftMap {
-        case (err, _) => DestinationError.malformedConfiguration((destinationType, config, err))
-      }
+  def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
+      config: AvalancheS3Config,
+      transactor: Transactor[F],
+      pushPull: PushmiPullyu[F],
+      log: Logger)
+      : Resource[F, Either[InitError, Destination[F]]] = {
 
-      connectionUri = cfg.connectionUri.toString
+    val bucketCfg = config.bucketConfig
 
-      xa <- EitherT.right(for {
-        poolSuffix <- Resource.liftF(Sync[F].delay(Random.alphanumeric.take(5).mkString))
-        connectPool <- boundedPool[F](s"avalanche-dest-connect-$poolSuffix", PoolSize)
-        transactPool <- unboundedPool[F](s"avalanche-dest-transact-$poolSuffix")
-        transactor <- HikariTransactor.newHikariTransactor[F](
-          IngresDriverFqcn,
-          connectionUri,
-          cfg.username.value,
-          cfg.clusterPassword.value,
-          connectPool,
-          transactPool)
-      } yield transactor)
+    val init = for {
+      client <- EitherT.right[InitError](s3Client[F](
+        bucketCfg.accessKey,
+        bucketCfg.secretKey,
+        bucketCfg.region))
 
-      bucketCfg = cfg.bucketConfig
-
-      client <- EitherT.right[InitializationError[Json]][Resource[F, ?], S3AsyncClient](
-        s3Client[F](bucketCfg.accessKey, bucketCfg.secretKey, bucketCfg.region))
-
-      _ <- EitherT(Resource.liftF(validBucket[F](client, config, bucketCfg.bucket)))
+      _ <- EitherT(Resource.liftF(validBucket[F](client, config.sanitized.asJson, bucketCfg.bucket)))
 
       deleteService = S3DeleteService(client, bucketCfg.bucket)
 
       putService = S3PutService(client, PartSize, bucketCfg.bucket)
 
-      _ <- EitherT.right[InitializationError[Json]](Resource.liftF(
-        xa.configure(ds => Sync[F].delay(ds.setMaxLifetime(MaxLifetime.toMillis)))))
+      dest = AvalancheS3Destination[F](
+        config.bucketConfig,
+        config.writeMode,
+        putService,
+        deleteService,
+        transactor,
+        log)
+    } yield dest
 
-      dest: Destination[F] = new AvalancheS3Destination[F](deleteService, putService, cfg, xa)
-
-    } yield dest).value
+    init.value
+  }
 
   private def validBucket[F[_]: Concurrent: ContextShift](
       client: S3AsyncClient,
-      config: Json,
+      sanitizedConfig: Json,
       bucket: Bucket)
-      : F[Either[InitializationError[Json], Unit]] = {
+      : F[Either[InitError, Unit]] =
     S3StatusService(client, bucket) map {
       case BlobstoreStatus.Ok =>
         ().asRight
+
       case BlobstoreStatus.NotFound =>
         DestinationError
-          .invalidConfiguration(
-            (destinationType, config, NonEmptyList("Upload bucket does not exist")))
+          .invalidConfiguration[Json, InitError](
+            destinationType,
+            sanitizedConfig,
+            ZNel("Upload bucket does not exist"))
           .asLeft
+
       case BlobstoreStatus.NoAccess =>
-        DestinationError.accessDenied(
-          (destinationType, config, "Access denied to upload bucket"))
+        DestinationError
+          .accessDenied[Json, InitError](
+            destinationType,
+            sanitizedConfig,
+            "Access denied to upload bucket")
           .asLeft
+
       case BlobstoreStatus.NotOk(msg) =>
         DestinationError
-          .invalidConfiguration(
-            (destinationType, config, NonEmptyList(msg)))
+          .invalidConfiguration[Json, InitError](
+            destinationType,
+            sanitizedConfig,
+            ZNel(msg))
           .asLeft
     }
-  }
 
   private def s3Client[F[_]: Concurrent](
-    accessKey: AccessKey,
-    secretKey: SecretKey,
-    region: Region)
+      accessKey: AccessKey,
+      secretKey: SecretKey,
+      region: Region)
       : Resource[F, S3AsyncClient] = {
     val client =
       Concurrent[F].delay(

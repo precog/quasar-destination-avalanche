@@ -16,18 +16,17 @@
 
 package quasar.destination.avalanche.s3
 
-import argonaut._, Argonaut._
-import cats.implicits._
+import scala._, Predef._
+
 import java.net.{URI, URISyntaxException}
-import quasar.blobstore.s3.{
-  AccessKey,
-  Bucket,
-  Region,
-  SecretKey
-}
-import quasar.destination.avalanche.{Json => J, WriteMode}, WriteMode._
-import scala._
-import scala.Predef._
+
+import argonaut._, Argonaut._
+
+import cats.implicits._
+
+import quasar.blobstore.s3.{AccessKey, Bucket, Region, SecretKey}
+import quasar.destination.avalanche.{Json => J, WriteMode}
+import quasar.plugin.jdbc.Redacted
 
 final case class Username(value: String)
 final case class ClusterPassword(value: String)
@@ -43,7 +42,19 @@ final case class AvalancheS3Config(
     connectionUri: URI,
     username: Username,
     clusterPassword: ClusterPassword,
-    writeMode: WriteMode)
+    writeMode: WriteMode) {
+
+  def sanitized: AvalancheS3Config =
+    copy(
+      clusterPassword =
+        ClusterPassword(Redacted),
+      bucketConfig =
+        BucketConfig(
+          bucketConfig.bucket,
+          AccessKey(Redacted),
+          SecretKey(Redacted),
+          Region(Redacted)))
+}
 
 object AvalancheS3Config {
 
