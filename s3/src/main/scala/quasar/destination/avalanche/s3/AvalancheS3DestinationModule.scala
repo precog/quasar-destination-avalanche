@@ -30,7 +30,6 @@ import cats.effect.{
 }
 import cats.implicits._
 import doobie.hikari.HikariTransactor
-import eu.timepit.refined.auto._
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.blobstore.s3.{
