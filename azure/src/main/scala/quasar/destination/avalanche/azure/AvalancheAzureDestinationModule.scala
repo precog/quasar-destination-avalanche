@@ -27,7 +27,6 @@ import cats.effect.{
   Sync,
   Timer
 }
-import eu.timepit.refined.auto._
 import doobie.hikari.HikariTransactor
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.api.destination.{DestinationError, DestinationType}
