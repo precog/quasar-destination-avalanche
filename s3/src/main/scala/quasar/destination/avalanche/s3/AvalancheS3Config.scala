@@ -16,20 +16,17 @@
 
 package quasar.destination.avalanche.s3
 
+import quasar.destination.avalanche._
+import quasar.destination.avalanche.json._
+
 import scala._, Predef._
 
-import java.net.{URI, URISyntaxException}
+import java.net.URI
 
 import argonaut._, Argonaut._
 
-import cats.implicits._
-
 import quasar.blobstore.s3.{AccessKey, Bucket, Region, SecretKey}
-import quasar.destination.avalanche.{Json => J, WriteMode}
 import quasar.plugin.jdbc.Redacted
-
-final case class Username(value: String)
-final case class ClusterPassword(value: String)
 
 final case class BucketConfig(
     bucket: Bucket,
@@ -57,25 +54,6 @@ final case class AvalancheS3Config(
 }
 
 object AvalancheS3Config {
-
-  val DbUser: Username = Username("dbuser")
-
-  implicit val decodeUsername: DecodeJson[Username] = J.decodeOrDefault(jdecode1(Username(_)), DbUser)
-  implicit val decodeClusterPassword: DecodeJson[ClusterPassword] = jdecode1(ClusterPassword(_))
-
-  implicit val encodeUsername: EncodeJson[Username] = jencode1(_.value)
-  implicit val encodeClusterPassword: EncodeJson[ClusterPassword] = jencode1(_.value)
-
-  private implicit val uriCodecJson: CodecJson[URI] =
-    CodecJson(
-      uri => Json.jString(uri.toString),
-      c => for {
-        uriStr <- c.jdecode[String]
-        uri0 = Either.catchOnly[URISyntaxException](new URI(uriStr))
-        uri <- uri0.fold(
-          ex => DecodeResult.fail(s"Invalid URI: ${ex.getMessage}", c.history),
-          DecodeResult.ok(_))
-      } yield uri)
 
   private implicit val bucketConfigCodecJson: CodecJson[BucketConfig] = {
     val encode: BucketConfig => Json = {

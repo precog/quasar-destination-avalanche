@@ -30,10 +30,15 @@ object AvalancheTransactorConfig {
   val MaxLifetime: FiniteDuration = 3.minutes
   val PoolSize: Int = 8
 
-  def apply(connectionUrl: URI, username: String, password: String): TransactorConfig = {
+  def apply(
+      connectionUrl: URI,
+      username: Username,
+      password: ClusterPassword)
+      : TransactorConfig = {
+
     val fullUrl = {
       val u = connectionUrl.toString
-      val auth = s"UID=$username;PWD=$password"
+      val auth = s"UID=${username.asString};PWD=${password.asString}"
 
       if (u.endsWith(";"))
         URI.create(u + auth)

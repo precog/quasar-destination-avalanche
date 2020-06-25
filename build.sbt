@@ -34,7 +34,7 @@ lazy val root = project
   .in(file("."))
   .settings(noPublishSettings)
   .settings(commonSettings)
-  .aggregate(core, azure, s3)
+  .aggregate(core, azure, s3, http)
 
 lazy val core = project
   .in(file("core"))
@@ -82,6 +82,21 @@ lazy val s3 = project
     quasarPluginDependencies ++= Seq(
       "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "async-blobstore-s3" % asyncBlobstoreVersion.value),
+    libraryDependencies ++= Seq(
+      "org.specs2" %% "specs2-core" % specs2Version % Test))
+  .enablePlugins(QuasarPlugin)
+
+lazy val http = project
+  .in(file("http"))
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(name := "quasar-destination-avalanche-http")
+  .settings(
+    quasarPluginName := "avalanche-http",
+    quasarPluginQuasarVersion := quasarVersion.value,
+    quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.http.AvalancheHttpDestinationModule$"),
+    quasarPluginDependencies ++= Seq(
+      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value),
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % specs2Version % Test))
   .enablePlugins(QuasarPlugin)

@@ -69,8 +69,8 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
   def transactorConfig(config: AvalancheS3Config): Either[NonEmptyList[String], TransactorConfig] =
     Right(AvalancheTransactorConfig(
       config.connectionUri,
-      config.username.value,
-      config.clusterPassword.value))
+      config.username,
+      config.clusterPassword))
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheS3Config].fold(

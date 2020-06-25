@@ -16,13 +16,19 @@
 
 package quasar.destination.avalanche.s3
 
-import argonaut._, Argonaut._
+import quasar.destination.avalanche._
+
 import java.net.URI
+
+import argonaut._, Argonaut._
+
 import org.specs2.mutable.Specification
+
 import quasar.blobstore.s3._
-import quasar.destination.avalanche.WriteMode._
 
 object AvalancheS3ConfigSpec extends Specification {
+  import WriteMode._
+
   "avalanche-s3 encodes and decodes a valid config with write mode create" >> {
     val initialJson = Json.obj(
       "bucketConfig" := Json.obj(

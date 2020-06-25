@@ -16,16 +16,18 @@
 
 package quasar.destination.avalanche
 
-import scala._
+import java.lang.String
 
-import argonaut._
+import argonaut.{Json => _, _}, Argonaut._
 
-object Json {
-  def decodeOrDefault[A](decodeJson: DecodeJson[A], defaultValue: A): DecodeJson[A] =
-    DecodeJson.withReattempt(a => a.success match {
-      case None =>
-        DecodeResult.ok(defaultValue)
-      case Some(v) =>
-        decodeJson.decode(v)
-    })
+final case class Username(asString: String)
+
+object Username {
+  val DbUser: Username = Username("dbuser")
+
+  implicit val usernameDecodeJson: DecodeJson[Username] =
+    json.decodeOrDefault(jdecode1(Username(_)), DbUser)
+
+  implicit val usernameEncodeJson: EncodeJson[Username] =
+    jencode1(_.asString)
 }

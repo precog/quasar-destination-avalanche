@@ -16,7 +16,10 @@
 
 package quasar.destination.avalanche.azure
 
-import java.net.{URI, URISyntaxException}
+import quasar.destination.avalanche._
+import quasar.destination.avalanche.json._
+
+import java.net.URI
 import scala._, Predef.String
 
 import quasar.blobstore.azure.{
@@ -30,14 +33,10 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
-import quasar.destination.avalanche.WriteMode
 import quasar.plugin.jdbc.Redacted
 
 import argonaut._, Argonaut._
 import cats.implicits._
-
-final case class Username(value: String)
-final case class ClusterPassword(value: String)
 
 final case class AvalancheAzureConfig(
     accountName: AccountName,
@@ -61,8 +60,6 @@ final case class AvalancheAzureConfig(
 
 object AvalancheAzureConfig {
 
-  val DbUser: Username = Username("dbuser")
-
   def toConfig(config: AvalancheAzureConfig): Config =
     DefaultConfig(
       config.containerName,
@@ -71,19 +68,7 @@ object AvalancheAzureConfig {
       None)
 
   private def storageUrl(accountName: AccountName): StorageUrl =
-    StorageUrl(
-      s"https://${accountName.value}.blob.core.windows.net")
-
-  private implicit val uriCodecJson: CodecJson[URI] =
-    CodecJson(
-      uri => Json.jString(uri.toString),
-      c => for {
-        uriStr <- c.jdecode[String]
-        uri0 = Either.catchOnly[URISyntaxException](new URI(uriStr))
-        uri <- uri0.fold(
-          ex => DecodeResult.fail(s"Invalid URI: ${ex.getMessage}", c.history),
-          DecodeResult.ok(_))
-      } yield uri)
+    StorageUrl(s"https://${accountName.value}.blob.core.windows.net")
 
   private implicit val activeDirectoryCodecJson: CodecJson[AzureCredentials.ActiveDirectory] =
     casecodec3[String, String, String, AzureCredentials.ActiveDirectory](
@@ -100,8 +85,8 @@ object AvalancheAzureConfig {
         ("accountName" := c.accountName.value) ->:
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
-        ("username" := c.username.value) ->:
-        ("clusterPassword" := c.password.value) ->:
+        ("username" := c.username) ->:
+        ("clusterPassword" := c.password) ->:
         ("writeMode" := c.writeMode) ->:
         ("credentials" := c.azureCredentials) ->:
         jEmptyObject,
@@ -110,16 +95,16 @@ object AvalancheAzureConfig {
          accountName <- (c --\ "accountName").as[String]
          containerName <- (c --\ "containerName").as[String]
          connectionUri <- (c --\ "connectionUri").as[URI]
-         username <- (c --\ "username").as[Option[String]]
-         clusterPassword <- (c --\ "clusterPassword").as[String]
+         username <- (c --\ "username").as[Username]
+         clusterPassword <- (c --\ "clusterPassword").as[ClusterPassword]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
        } yield AvalancheAzureConfig(
          AccountName(accountName),
          ContainerName(containerName),
          connectionUri,
-         username.fold(DbUser)(Username(_)),
-         ClusterPassword(clusterPassword),
+         username,
+         clusterPassword,
          writeMode.getOrElse(WriteMode.Replace),
          credentials)))
 }
