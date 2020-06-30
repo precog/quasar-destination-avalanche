@@ -38,7 +38,7 @@ import quasar.blobstore.azure.{
   TenantId
 }
 import quasar.connector.MonadResourceErr
-import quasar.connector.destination.{Destination, DestinationModule}
+import quasar.connector.destination.{Destination, DestinationModule, PushmiPullyu}
 import scala.{
   Int,
   StringContext
@@ -68,7 +68,9 @@ object AvalancheAzureDestinationModule extends DestinationModule {
           ClusterPassword(Redacted)).asJson)
 
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-    config: Json): Resource[F, Either[InitializationError[Json], Destination[F]]] =
+      config: Json,
+      pushPull: PushmiPullyu[F])
+      : Resource[F, Either[InitializationError[Json], Destination[F]]] =
     (for {
       cfg <- EitherT.fromEither[Resource[F, ?]](config.as[AvalancheAzureConfig].result) leftMap {
         case (err, _) => DestinationError.malformedConfiguration((destinationType, config, err))
