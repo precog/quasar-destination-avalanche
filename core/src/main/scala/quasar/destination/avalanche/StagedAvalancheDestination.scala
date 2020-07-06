@@ -59,10 +59,9 @@ final class StagedAvalancheDestination[F[_]: Sync: MonadResourceErr: Timer](
       gzippedCsv: Stream[F, Byte])
       : Stream[F, Unit] =
     Stream.resource(stageBytes(gzippedCsv) evalMap { uri =>
-      val prepare = prepareTable(tableName, columns, writeMode, logHandler)
-      val vwload = copyVWLoad(tableName, NonEmptyList.one(uri), vwloadAuthParams, logHandler)
-
-      (prepare >> vwload).void.transact(xa)
+      loadUris(tableName, columns, writeMode, NonEmptyList.one(uri), vwloadAuthParams, logHandler)
+        .void
+        .transact(xa)
     })
 
   ////

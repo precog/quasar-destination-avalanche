@@ -73,6 +73,21 @@ package object avalanche {
     s""""$escaped""""
   }
 
+  def loadUris(
+      tableName: TableName,
+      columns: NonEmptyList[Fragment],
+      writeMode: WriteMode,
+      srcUris: NonEmptyList[URI],
+      authParameters: Map[String, String],
+      logHandler: LogHandler)
+      : ConnectionIO[Int] = {
+
+    val prepare = prepareTable(tableName, columns, writeMode, logHandler)
+    val vwload = copyVWLoad(tableName, srcUris, authParameters, logHandler)
+
+    prepare >> vwload
+  }
+
   def prepareTable(
       tableName: TableName,
       columns: NonEmptyList[Fragment],

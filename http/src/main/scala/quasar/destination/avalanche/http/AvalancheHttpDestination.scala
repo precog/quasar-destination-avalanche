@@ -72,9 +72,9 @@ final class AvalancheHttpDestination[F[_]: MonadResourceErr: Sync: Timer](
           url0.getFragment)
       }
 
-      val prepare = prepareTable(tableName, columns, writeMode, logHandler)
-      val vwload = copyVWLoad(tableName, NonEmptyList.one(url), Map(), logHandler)
-      (prepare >> vwload.void).transact(xa)
+      loadUris(tableName, columns, writeMode, NonEmptyList.one(url), Map(), logHandler)
+        .void
+        .transact(xa)
     }
 
     gzippedCsv.through(proxied)
