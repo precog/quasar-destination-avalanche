@@ -12,14 +12,17 @@ or
 libraryDependencies += "com.precog" %% "quasar-destination-avalanche-s3" % <version>
 ```
 
+or
+
+```sbt
+libraryDependencies += "com.precog" %% "quasar-destination-avalanche-http" % <version>
+```
+
 ## Avalanche with Azure Blob Storage Configuration
 
-The Avalanche destination uses Azure Blob Storage to stage files
-before loading. Its only means of authentication is [Azure Active
-Directory](https://azure.microsoft.com/en-us/services/active-directory/). It
-has the following format:
+The Avalanche destination uses Azure Blob Storage to stage files before loading. Its only means of authentication is [Azure Active Directory](https://azure.microsoft.com/en-us/services/active-directory/). It has the following format:
 
-```json
+```
 {
   "accountName": String,
   "containerName": String,
@@ -41,7 +44,7 @@ has the following format:
 - `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
 - `credentials` specifies the Azure Active Directory configuration
 
-```json
+```
 "credentials": {
   "clientId": String,
   "tenantId": String,
@@ -57,7 +60,7 @@ has the following format:
 
 Configuration format for Avalanche with S3 staging is:
 
-```json
+```
 {
   "bucketConfig": Object,
   "connectionUri": String,
@@ -69,7 +72,7 @@ Configuration format for Avalanche with S3 staging is:
 
 Where `bucketConfig` has this format:
 
-```json
+```
 {
   "bucket": String,
   "credentials": {
@@ -82,7 +85,7 @@ Where `bucketConfig` has this format:
 
 Example:
 
-```json
+```
 {
   "bucketConfig": {
     "bucket": "bucket-name",
@@ -105,7 +108,7 @@ In order to use S3 staging with Avalanche both must be in the same AWS region.
 
 You must also create an IAM user, generate an AccessKey and SecretKey, and assign this policy:
 
-```json
+```
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -134,3 +137,34 @@ You must also create an IAM user, generate an AccessKey and SecretKey, and assig
 }
 ```
 
+## Avalanche with Direct HTTP Configuration
+
+When the Avalanche cluster has direct access via HTTP to Precog, staging can be avoided altogether. Configuration for this variant is:
+
+```
+{
+  "connectionUri": String,
+  "username":String,
+  "clusterPassword": String,
+  "writeMode": "create" | "replace" | "truncate",
+  ["baseUrl": String]
+}
+```
+
+* `connectionUri`: The JDBC URL provided by Actian for connecting to the Avalanche cluster
+* `username`: the username to use when connecting to Avalanche
+* `clusterPassword`: the password to use when connecting to Avalanche
+* `writeMode`: determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
+* `baseUrl` (optional): The base URL that should be used to access the Precog HTTP api, if omitted the IP and port of the Precog server itself is used.
+
+Example:
+
+```
+{
+  "connectionUri": "jdbc:ingres://<avalanche-cluster-domain>:27839/db;encryption=on",
+  "username": "dbuser",
+  "clusterPassword": "avalanche-cluster-password",
+  "writeMode": "create",
+  "baseUrl": "https://precog.myorganization.com"
+}
+```

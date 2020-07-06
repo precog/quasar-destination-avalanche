@@ -16,13 +16,19 @@
 
 package quasar.destination.avalanche.azure
 
-import argonaut._, Argonaut._
+import quasar.destination.avalanche._
+
 import java.net.URI
+
+import argonaut._, Argonaut._
+
 import org.specs2.mutable.Specification
+
 import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
-import quasar.destination.avalanche.WriteMode._
 
 object AvalancheAzureConfigSpec extends Specification {
+  import WriteMode._
+
   "avalanche-azure encodes and decodes a valid config without write mode" >> {
     val initialJson = Json.obj(
       "accountName" := "foo",

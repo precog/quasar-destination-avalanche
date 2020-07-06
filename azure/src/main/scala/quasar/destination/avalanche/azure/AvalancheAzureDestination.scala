@@ -16,182 +16,90 @@
 
 package quasar.destination.avalanche.azure
 
-import quasar.destination.avalanche.AvalancheQueries._
+import quasar.destination.avalanche._
 
+import scala._, Predef._
 
-import cats.ApplicativeError
-import cats.data.NonEmptyList
+import cats.data.Kleisli
+import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
 import cats.implicits._
+
 import com.azure.storage.blob.BlobContainerAsyncClient
-import doobie._
-import doobie.free.connection.createStatement
-import doobie.implicits._
-import fs2.{compression, Stream}
-import java.util.UUID
+
+import doobie.Transactor
+
+import fs2.Stream
+
 import java.net.URI
-import org.slf4s.Logging
+
+import org.slf4s.Logger
+
 import pathy.Path.FileName
-import quasar.api.destination.DestinationType
-import quasar.api.resource._
-import quasar.api.ColumnType
+
+import quasar.blobstore.BlobstoreStatus
 import quasar.blobstore.azure.{AzureDeleteService, AzurePutService, Expires, TenantId}
-import quasar.blobstore.paths.{BlobPath, PathElem}
-import quasar.connector.destination.{LegacyDestination, ResultSink}
-import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.destination.avalanche.WriteMode._
-import scala.{
-  Byte,
-  Int,
-  List,
-  RuntimeException,
-  Seq,
-  Some,
-  StringContext,
-  Throwable,
-  Unit
- }
-import scala.Predef.String
-import scala.util.matching.Regex
+import quasar.blobstore.paths.BlobPath
+import quasar.connector.destination.Destination
+import quasar.connector.MonadResourceErr
 
-final class AvalancheAzureDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-    xa: Transactor[F],
-    refContainerClient: Ref[F, Expires[BlobContainerAsyncClient]],
-    refreshToken: F[Unit],
-    config: AvalancheAzureConfig) extends LegacyDestination[F] with Logging {
+object AvalancheAzureDestination {
+  def apply[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
+      config: AvalancheAzureConfig,
+      refContainerClient: Ref[F, Expires[BlobContainerAsyncClient]],
+      refreshToken: F[Unit],
+      xa: Transactor[F],
+      logger: Logger)
+      : Destination[F] = {
 
-  def destinationType: DestinationType =
-    AvalancheAzureDestinationModule.destinationType
-
-  def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = NonEmptyList.of(csvSink)
-
-  private val csvSink: ResultSink[F, ColumnType.Scalar] = 
-    ResultSink.create[F, ColumnType.Scalar](AvalancheRenderConfig) {
-      case (path, columns, bytes) =>
-        for {
-          tableName <- Stream.eval(ensureValidTableName(path))
-
-          cols <- ApplicativeError[Stream[F, ?], Throwable].fromEither(
-            ensureValidColumns(columns).leftMap(new RuntimeException(_)))
-
-          compressed = bytes.through(compression.gzip(bufferSize = 1024 * 32))
-
-          freshName <- Stream.eval(upload(compressed))
-
-          _ <- Stream.eval(copy(tableName, freshName, cols)).onFinalize(deleteBlob(freshName))
-
-        } yield ()
-  }
-
-  private def deleteBlob(freshName: FileName): F[Unit] =
-    for {
-      _ <- refreshToken
-
-      containerClient <- refContainerClient.get
-
-      deleteService = AzureDeleteService.mk[F](containerClient.value)
-
-      _ <- deleteService(BlobPath(List(PathElem(freshName.value))))
-    } yield ()
-
-  private def copy(tableName: String, fileName: FileName, cols: NonEmptyList[Fragment])
-      : F[Unit] = {
-
-    val dropQuery = dropTableQuery(tableName).update
-
-    val existanceQuery = existanceTableQuery(tableName).query[Int]
-
-    val truncateQuery = truncateTableQuery(tableName).update
-
-    val createQuery = createTableQuery(tableName, cols).update
-
-    val staginUri = URI.create(
-      s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/${fileName.value}")
     val authCfg = config.azureCredentials
-    val endpoint = authEndpoint(authCfg.tenantId)
-    val auth = Seq[(String, String)](
-      ("AZURE_CLIENT_ENDPOINT", endpoint),
-      ("AZURE_CLIENT_ID", authCfg.clientId.value),
-      ("AZURE_CLIENT_SECRET", authCfg.clientSecret.value))
 
-    val loadQuery = copyQuery(tableName, fileName.value, staginUri, auth).update
+    val authParams = Map(
+      "AZURE_CLIENT_ENDPOINT" -> authEndpoint(authCfg.tenantId),
+      "AZURE_CLIENT_ID" -> authCfg.clientId.value,
+      "AZURE_CLIENT_SECRET" -> authCfg.clientSecret.value)
 
-    for {
-      _ <- debug(s"Table creation query:\n${createQuery.sql}")
+    val stagedUri: FileName => URI =
+      n => URI.create(s"abfs://${config.containerName.value}@${config.accountName.value}.dfs.core.windows.net/${n.value}")
 
-      _ <- config.writeMode match {
-        case Replace => debug(s"Drop table query:\n${dropQuery.sql}")
-        case Truncate => debug(s"Truncate table query:\n${truncateQuery.sql}")
-        case Create => ().pure[F]
+    val putService =
+      Kleisli[F, (BlobPath, Stream[F, Byte]), Int] { args =>
+        for {
+          _ <- refreshToken
+          containerClient <- refContainerClient.get
+          put = AzurePutService.mk[F](containerClient.value)
+          result <- put(args)
+        } yield result
       }
 
-      _ <- debugRedacted(s"Load query:\n${loadQuery.sql}")
-
-      load = Sync[ConnectionIO].bracket(createStatement)(st =>
+    val deleteService =
+      Kleisli[F, BlobPath, BlobstoreStatus] { path =>
         for {
-          _ <- Sync[ConnectionIO].delay(st.execute(loadQuery.sql))
-          count <- Sync[ConnectionIO].delay(st.getUpdateCount)
-        } yield count)(st => Sync[ConnectionIO].delay(st.close))
+          _ <- refreshToken
+          containerClient <- refContainerClient.get
+          delete = AzureDeleteService.mk[F](containerClient.value)
+          result <- delete(path)
+        } yield result
+      }
 
-      count <- ((config.writeMode match {
-          case Replace => dropQuery.run *> createQuery.run
-          case Create => createQuery.run
-          case Truncate => (for {
-              exists <- existanceQuery.option
-              result <- if (exists == Some(1)) truncateQuery.run else createQuery.run
-            } yield result)
-        }) *> load).transact(xa)
-
-      _ <- debug(s"Finished load")
-
-      _ <- debug(s"Load result count: $count")
-
-      _ <- debug(s"Finished table copy")
-
-    } yield ()
+    new StagedAvalancheDestination[F](
+      AvalancheAzureDestinationModule.destinationType,
+      putService,
+      deleteService,
+      stagedUri,
+      authParams,
+      config.writeMode,
+      xa,
+      logger)
   }
 
-  private def upload(bytes: Stream[F, Byte]): F[FileName] =
-    for {
-      freshNameSuffix <- Sync[F].delay(UUID.randomUUID().toString)
-      freshName = s"precog-$freshNameSuffix"
-
-      _ <- refreshToken
-
-      containerClient <- refContainerClient.get
-
-      put = AzurePutService.mk[F](containerClient.value)
-
-      _ <- debug(s"Starting upload of $freshName")
-
-      _ <- put((BlobPath(List(PathElem(freshName))), bytes))
-
-      _ <- debug(s"Finished upload of $freshName")
-
-    } yield FileName(freshName)
-
-  private def removeSingleQuotes(str: String): String =
-    str.replace("'", "")
-
-  private def ensureValidTableName(r: ResourcePath): F[String] =
-    r match {
-      case file /: ResourcePath.Root => escapeIdent(file).pure[F]
-      case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(r))
-    }
+  ////
 
   private def authEndpoint(tid: TenantId): String = {
     val tenant = removeSingleQuotes(tid.value)
-    
     s"https://login.microsoftonline.com/$tenant/oauth2/token"
   }
 
-  private def debug(msg: String): F[Unit] =
-    Sync[F].delay(log.debug(msg))
-
-  private def debugRedacted(msg: String): F[Unit] = {
-    // remove everything within single quotes, to avoid leaking credentials
-    Sync[F].delay(
-      log.debug((new Regex("""'[^' ]{2,}'""")).replaceAllIn(msg, "<REDACTED>")))
-  }
+  private def removeSingleQuotes(str: String): String =
+    str.replace("'", "")
 }

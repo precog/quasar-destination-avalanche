@@ -14,23 +14,16 @@
  * limitations under the License.
  */
 
-package quasar.destination.avalanche.azure
+package quasar.destination.avalanche.http
 
 import quasar.destination.avalanche._
 
-import scala.util.{Either, Right}
-
-import java.lang.String
+import scala._, Predef._
 
 import argonaut._, Argonaut._
 
 import cats.data.NonEmptyList
-import cats.effect.{
-  ConcurrentEffect,
-  ContextShift,
-  Resource,
-  Timer
-}
+import cats.effect._
 import cats.implicits._
 
 import doobie.Transactor
@@ -38,37 +31,33 @@ import doobie.Transactor
 import org.slf4s.Logger
 
 import quasar.api.destination.DestinationType
-import quasar.blobstore.azure.Azure
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.plugin.jdbc.TransactorConfig
 
-object AvalancheAzureDestinationModule extends AvalancheDestinationModule[AvalancheAzureConfig] {
+object AvalancheHttpDestinationModule extends AvalancheDestinationModule[AvalancheHttpConfig] {
 
   val destinationType: DestinationType =
-    DestinationType("avalanche-azure", 1L)
+    DestinationType("avalanche-http", 1L)
 
-  def transactorConfig(config: AvalancheAzureConfig): Either[NonEmptyList[String], TransactorConfig] =
+  def transactorConfig(config: AvalancheHttpConfig): Either[NonEmptyList[String], TransactorConfig] =
     Right(AvalancheTransactorConfig(
       config.connectionUri,
       config.username,
-      config.password))
+      config.clusterPassword))
 
   def sanitizeDestinationConfig(config: Json): Json =
-    config.as[AvalancheAzureConfig].fold(
+    config.as[AvalancheHttpConfig].fold(
       (_, _) => jEmptyObject,
       _.sanitized.asJson)
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-      config: AvalancheAzureConfig,
+      config: AvalancheHttpConfig,
       transactor: Transactor[F],
       pushPull: PushmiPullyu[F],
       log: Logger)
-      : Resource[F, Either[InitError, Destination[F]]] = {
-
-    Resource.liftF(Azure.refContainerClient(AvalancheAzureConfig.toConfig(config)) map {
-      case (refClient, refresh) =>
-        AvalancheAzureDestination[F](config, refClient, refresh, transactor, log).asRight[InitError]
-    })
-  }
+      : Resource[F, Either[InitError, Destination[F]]] =
+    new AvalancheHttpDestination(config.writeMode, config.baseUrl, transactor, pushPull, log)
+      .asRight[InitError]
+      .pure[Resource[F, ?]]
 }
