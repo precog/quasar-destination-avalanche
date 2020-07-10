@@ -46,6 +46,7 @@ lazy val core = project
     libraryDependencies ++= Seq(
       "com.precog" %% "async-blobstore-core" % asyncBlobstoreVersion.value,
       "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "quasar-api" % quasarVersion.value,
       "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
       "org.specs2" %% "specs2-core" % specs2Version % Test),
     assemblyExcludedJars in assembly := {
@@ -53,6 +54,8 @@ lazy val core = project
       cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
     },
     packageBin in Compile := (assembly in Compile).value)
+  .evictToLocal("QUASAR_PATH", "api", true)
+  .evictToLocal("QUASAR_PATH", "connector", true)
 
 lazy val azure = project
   .in(file("azure"))
