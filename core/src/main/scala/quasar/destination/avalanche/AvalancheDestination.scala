@@ -70,12 +70,12 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
       TypeCoercion.Unsatisfied(List(), None)
     case ColumnType.Number =>
       TypeCoercion.Satisfied(NonEmptyList.of(
+        Id.FLOAT8,
+        Id.FLOAT4,
         Id.INTEGER1,
         Id.INTEGER2,
         Id.INTEGER4,
         Id.INTEGER8,
-        Id.FLOAT4,
-        Id.FLOAT8,
         Id.DECIMAL,
         Id.MONEY))
     case ColumnType.String =>
@@ -107,7 +107,6 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
         Labeled("precision", Formal.integer(Some(Ior.Both(1, 38)), Some(stepOne))),
         Labeled("scale", Formal.integer(Some(Ior.Left(0)), Some(stepOne))),
         Type.DECIMAL(_, _)))
-
     case Id.FLOAT4 =>
       Left(Type.FLOAT4)
     case Id.FLOAT8 =>
