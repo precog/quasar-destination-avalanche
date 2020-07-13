@@ -36,9 +36,7 @@ import quasar.api.push.TypeCoercion
 import quasar.api.push.param._
 import quasar.api.resource._
 import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.connector.destination.{Destination, ResultSink}
-
-import skolems.∃
+import quasar.connector.destination.{Constructor, Destination, ResultSink}
 
 abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     logger: Logger)
@@ -50,35 +48,6 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
   val Type = AvalancheType
   type TypeId = AvalancheTypeId
   val Id = AvalancheTypeId
-
-  trait Constructor[P] extends ConstructorLike[P]
-
-  object Constructor {
-    final case object NCHAR extends Constructor[Int] {
-      def apply(size: Int) = Type.NCHAR(size)
-    }
-    final case object NVARCHAR extends Constructor[Int] {
-      def apply(size: Int) = Type.NVARCHAR(size)
-    }
-    final class TIME(zoning: Type.TimeZoning) extends Constructor[Int] {
-      def apply(precision: Int) = Type.TIME(precision, zoning)
-    }
-    final class TIMESTAMP(zoning: Type.TimeZoning) extends Constructor[Int] {
-      def apply(precision: Int) = Type.TIMESTAMP(precision, zoning)
-    }
-    final case object INTERVAL_DAY extends Constructor[Int] {
-      def apply(precision: Int) = Type.INTERVAL_DAY(precision)
-    }
-    final case object DECIMAL extends Constructor[(Int, Int)] {
-      def apply(params: (Int, Int)) = Type.DECIMAL(params._1, params._2)
-    }
-    object TIME {
-      def apply(zoning: Type.TimeZoning) = new TIME(zoning)
-    }
-    object TIMESTAMP {
-      def apply(zoning: Type.TimeZoning) = new TIMESTAMP(zoning)
-    }
-  }
 
   def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = tpe match {
     case ColumnType.Null =>
@@ -120,11 +89,11 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
         Id.UUID))
   }
 
-  def construct(id: TypeId): Either[Type, ∃[λ[α => (Constructor[α], Labeled[Formal[α]])]]] = id match {
+  def construct(id: TypeId): Either[Type, Constructor[Type]] = id match {
     case Id.NCHAR =>
-      withCharLength(Constructor.NCHAR)
+      withCharLength(Type.NCHAR(_))
     case Id.NVARCHAR =>
-      withCharLength(Constructor.NVARCHAR)
+      withCharLength(Type.NVARCHAR(_))
     case Id.INTEGER1 =>
       Left(Type.INTEGER1)
     case Id.INTEGER2 =>
@@ -134,10 +103,11 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     case Id.INTEGER8 =>
       Left(Type.INTEGER8)
     case Id.DECIMAL =>
-      Right(formalConstructor[(Int, Int)](Constructor.DECIMAL, "decimal params",
-        Formal.Pair(
-          Formal.integer(Some(Ior.Both(1, 38)), Some(stepOne)),
-          Formal.integer(Some(Ior.Left(0)), Some(stepOne)))))
+      Right(Constructor.Binary(
+        Labeled("precision", Formal.integer(Some(Ior.Both(1, 38)), Some(stepOne))),
+        Labeled("scale", Formal.integer(Some(Ior.Left(0)), Some(stepOne))),
+        Type.DECIMAL(_, _)))
+
     case Id.FLOAT4 =>
       Left(Type.FLOAT4)
     case Id.FLOAT8 =>
@@ -153,19 +123,19 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     case Id.UUID =>
       Left(Type.UUID)
     case Id.TIME =>
-      withSeconds(Constructor.TIME(Type.TimeZoning.WithoutZone))
+      withSeconds(Type.TIME(_, Type.TimeZoning.WithoutZone))
     case Id.TIME_ZONED =>
-      withSeconds(Constructor.TIME(Type.TimeZoning.WithZone))
+      withSeconds(Type.TIME(_, Type.TimeZoning.WithZone))
     case Id.TIME_LOCAL =>
-      withSeconds(Constructor.TIME(Type.TimeZoning.WithLocalZone))
+      withSeconds(Type.TIME(_, Type.TimeZoning.WithLocalZone))
     case Id.TIMESTAMP =>
-      withSeconds(Constructor.TIMESTAMP(Type.TimeZoning.WithoutZone))
+      withSeconds(Type.TIMESTAMP(_, Type.TimeZoning.WithoutZone))
     case Id.TIMESTAMP_ZONED =>
-      withSeconds(Constructor.TIMESTAMP(Type.TimeZoning.WithZone))
+      withSeconds(Type.TIMESTAMP(_, Type.TimeZoning.WithZone))
     case Id.TIMESTAMP_LOCAL =>
-      withSeconds(Constructor.TIMESTAMP(Type.TimeZoning.WithLocalZone))
+      withSeconds(Type.TIMESTAMP(_, Type.TimeZoning.WithLocalZone))
     case Id.INTERVAL_DAY =>
-      withSeconds(Constructor.INTERVAL_DAY)
+      withSeconds(Type.INTERVAL_DAY(_))
     case Id.INTERVAL_YEAR =>
       Left(Type.INTERVAL_YEAR)
     case Id.ANSIDATE =>
@@ -173,11 +143,15 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
   }
   private def stepOne: IntegerStep = IntegerStep.Factor(0, 1)
 
-  private def withCharLength(cstr: Constructor[Int]): Either[Type, ∃[λ[α => (Constructor[α], Labeled[Formal[α]])]]] =
-    Right(formalConstructor[Int](cstr, "size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne))))
+  private def withCharLength(mkType: Int => Type): Either[Type, Constructor[Type]] =
+    Right(Constructor.Unary(
+      Labeled("size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne))),
+      mkType))
 
-  private def withSeconds(cstr: Constructor[Int]): Either[Type, ∃[λ[α => (Constructor[α], Labeled[Formal[α]])]]] =
-    Right(formalConstructor[Int](cstr, "seconds precision", Formal.integer(Some(Ior.both(0, 9)), Some(stepOne))))
+  private def withSeconds(mkType: Int => Type): Either[Type, Constructor[Type]] =
+    Right(Constructor.Unary(
+      Labeled("seconds precision", Formal.integer(Some(Ior.both(0, 9)), Some(stepOne))),
+      mkType))
 
   val typeIdOrdinal = Id.ordinalPrism
   implicit val typeIdLabel = Id.label
