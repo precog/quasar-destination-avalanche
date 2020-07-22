@@ -144,7 +144,7 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
 
   private def withCharLength(mkType: Int => Type): Either[Type, Constructor[Type]] =
     Right(Constructor.Unary(
-      Labeled("size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne))),
+      Labeled("size", Formal.integer(Some(Ior.both(1, 8000)), Some(stepOne))),
       mkType))
 
   private def withSeconds(mkType: Int => Type): Either[Type, Constructor[Type]] =
