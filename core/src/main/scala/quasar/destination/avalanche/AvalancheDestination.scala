@@ -140,6 +140,7 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     case Id.ANSIDATE =>
       Left(Type.ANSIDATE)
   }
+
   private def stepOne: IntegerStep = IntegerStep.Factor(0, 1)
 
   private def withCharLength(mkType: Int => Type): Either[Type, Constructor[Type]] =
