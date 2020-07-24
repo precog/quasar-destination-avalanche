@@ -122,6 +122,14 @@ package object avalanche {
       case WriteMode.Create =>
         createTableUpdate.run
 
+      case WriteMode.Append =>
+        tableExistsQuery.option flatMap { result =>
+          if (result.exists(_ == 1))
+            0.pure[ConnectionIO]
+          else
+            createTableUpdate.run
+        }
+
       case WriteMode.Truncate =>
         tableExistsQuery.option flatMap { result =>
           if (result.exists(_ == 1))
