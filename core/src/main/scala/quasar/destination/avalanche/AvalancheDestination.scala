@@ -104,8 +104,8 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
       Left(Type.INTEGER8)
     case Id.DECIMAL =>
       Right(Constructor.Binary(
-        Labeled("precision", Formal.integer(Some(Ior.Both(1, 38)), Some(stepOne))),
-        Labeled("scale", Formal.integer(Some(Ior.Left(0)), Some(stepOne))),
+        Labeled("precision", Formal.integer(Some(Ior.Both(1, 38)), Some(stepOne), None)),
+        Labeled("scale", Formal.integer(Some(Ior.Left(0)), Some(stepOne), None)),
         Type.DECIMAL(_, _)))
     case Id.FLOAT4 =>
       Left(Type.FLOAT4)
@@ -145,12 +145,12 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
 
   private def withCharLength(mkType: Int => Type): Either[Type, Constructor[Type]] =
     Right(Constructor.Unary(
-      Labeled("size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne))),
+      Labeled("size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne), Some(4000))),
       mkType))
 
   private def withSeconds(mkType: Int => Type): Either[Type, Constructor[Type]] =
     Right(Constructor.Unary(
-      Labeled("seconds precision", Formal.integer(Some(Ior.both(0, 9)), Some(stepOne))),
+      Labeled("seconds precision", Formal.integer(Some(Ior.both(0, 9)), Some(stepOne), None)),
       mkType))
 
   val typeIdOrdinal = Id.ordinalPrism
