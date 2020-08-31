@@ -25,7 +25,7 @@ import cats.implicits._
 
 import doobie._
 
-import fs2.{compression, Stream}
+import fs2.{compression, Pipe, Stream}
 
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 
@@ -175,24 +175,25 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     Fragment.const(escapeIdent(c.name)) ++ c.tpe.fragment
 
   val sinks: NonEmptyList[ResultSink[F, Type]] =
-    NonEmptyList.one(ResultSink.create[F, Type](AvalancheRenderConfig) {
-      case (path, typedCols, bytes) =>
-        Stream.force(for {
-          tableName <- ensureValidTableName(path)
+    NonEmptyList.one(ResultSink.create[F, Type, Byte] { (path, typedCols) =>
+      val pipe: Pipe[F, Byte, Unit] = bytes => Stream.force(for {
+        tableName <- ensureValidTableName(path)
 
-          columns = typedCols.map(mkColumn)
+        columns = typedCols.map(mkColumn)
 
-          compressed = bytes.through(compression.gzip(bufferSize = CompressionBufferSize))
+        compressed = bytes.through(compression.gzip(bufferSize = CompressionBufferSize))
 
-          _ <- log.debug(s"Avalanche load of $tableName started")
+        _ <- log.debug(s"Avalanche load of $tableName started")
 
-          loaded = loadGzippedCsv(tableName, columns, compressed) onError {
-            case t => Stream.eval(log.debug(t)(s"Avalanche load of $tableName failed: ${t.getMessage}"))
-          }
+        loaded = loadGzippedCsv(tableName, columns, compressed) onError {
+          case t => Stream.eval(log.debug(t)(s"Avalanche load of $tableName failed: ${t.getMessage}"))
+        }
 
-          logComplete = Stream.eval_(log.debug(s"Avalanche load of $tableName completed"))
+        logComplete = Stream.eval_(log.debug(s"Avalanche load of $tableName completed"))
 
-        } yield loaded ++ logComplete)
+      } yield loaded ++ logComplete)
+
+      (AvalancheRenderConfig, pipe)
     })
 }
 object AvalancheDestination {
