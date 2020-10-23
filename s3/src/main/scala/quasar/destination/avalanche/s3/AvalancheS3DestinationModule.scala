@@ -39,22 +39,18 @@ import doobie.Transactor
 
 import org.slf4s.Logger
 
-import quasar.api.destination.{DestinationError, DestinationType}
+import quasar.api.destination.DestinationType
 import quasar.blobstore.s3.{
   S3DeleteService,
   S3PutService,
-  S3StatusService,
   AccessKey,
   Bucket,
   Region,
   SecretKey
 }
-import quasar.blobstore.BlobstoreStatus
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.plugin.jdbc.TransactorConfig
-
-import scalaz.{NonEmptyList => ZNel}
 
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
@@ -110,39 +106,40 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
     init.value
   }
 
+  // skip validation for now, see ch11655
   private def validBucket[F[_]: Concurrent: ContextShift](
       client: S3AsyncClient,
       sanitizedConfig: Json,
       bucket: Bucket)
-      : F[Either[InitError, Unit]] =
-    S3StatusService(client, bucket) map {
-      case BlobstoreStatus.Ok =>
-        ().asRight
+      : F[Either[InitError, Unit]] = ().asRight[InitError].pure[F]
+    // S3StatusService(client, bucket) map {
+    //   case BlobstoreStatus.Ok =>
+    //     ().asRight
 
-      case BlobstoreStatus.NotFound =>
-        DestinationError
-          .invalidConfiguration[Json, InitError](
-            destinationType,
-            sanitizedConfig,
-            ZNel("Upload bucket does not exist"))
-          .asLeft
+    //   case BlobstoreStatus.NotFound =>
+    //     DestinationError
+    //       .invalidConfiguration[Json, InitError](
+    //         destinationType,
+    //         sanitizedConfig,
+    //         ZNel("Upload bucket does not exist"))
+    //       .asLeft
 
-      case BlobstoreStatus.NoAccess =>
-        DestinationError
-          .accessDenied[Json, InitError](
-            destinationType,
-            sanitizedConfig,
-            "Access denied to upload bucket")
-          .asLeft
+    //   case BlobstoreStatus.NoAccess =>
+    //     DestinationError
+    //       .accessDenied[Json, InitError](
+    //         destinationType,
+    //         sanitizedConfig,
+    //         "Access denied to upload bucket")
+    //       .asLeft
 
-      case BlobstoreStatus.NotOk(msg) =>
-        DestinationError
-          .invalidConfiguration[Json, InitError](
-            destinationType,
-            sanitizedConfig,
-            ZNel(msg))
-          .asLeft
-    }
+    //   case BlobstoreStatus.NotOk(msg) =>
+    //     DestinationError
+    //       .invalidConfiguration[Json, InitError](
+    //         destinationType,
+    //         sanitizedConfig,
+    //         ZNel(msg))
+    //       .asLeft
+    // }
 
   private def s3Client[F[_]: Concurrent](
       accessKey: AccessKey,
