@@ -66,9 +66,9 @@ object AvalancheAzureDestinationModule extends AvalancheDestinationModule[Avalan
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] = {
 
-    Resource.liftF(Azure.refContainerClient(AvalancheAzureConfig.toConfig(config)) map {
-      case (refClient, refresh) =>
-        AvalancheAzureDestination[F](config, refClient, refresh, transactor, log).asRight[InitError]
-    })
+    val clientMgr = Azure.refContainerClient(AvalancheAzureConfig.toConfig(config))
+    val dest = AvalancheAzureDestination[F](config, clientMgr, transactor, log)
+
+    Resource.liftF(dest.asRight[InitError].pure[F])
   }
 }
