@@ -88,7 +88,8 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
         bucketCfg.secretKey,
         bucketCfg.region))
 
-      _ <- EitherT(Resource.liftF(validBucket[F](client, config.sanitized.asJson, bucketCfg.bucket)))
+      // skip validation for now, see ch11655
+      // _ <- EitherT(Resource.liftF(validBucket[F](client, config.sanitized.asJson, bucketCfg.bucket)))
 
       deleteService = S3DeleteService(client, bucketCfg.bucket)
 
@@ -106,40 +107,39 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
     init.value
   }
 
-  // skip validation for now, see ch11655
-  private def validBucket[F[_]: Concurrent: ContextShift](
-      client: S3AsyncClient,
-      sanitizedConfig: Json,
-      bucket: Bucket)
-      : F[Either[InitError, Unit]] = ().asRight[InitError].pure[F]
-    // S3StatusService(client, bucket) map {
-    //   case BlobstoreStatus.Ok =>
-    //     ().asRight
+  // private def validBucket[F[_]: Concurrent: ContextShift](
+  //     client: S3AsyncClient,
+  //     sanitizedConfig: Json,
+  //     bucket: Bucket)
+  //     : F[Either[InitError, Unit]] =
+  //   S3StatusService(client, bucket) map {
+  //     case BlobstoreStatus.Ok =>
+  //       ().asRight
 
-    //   case BlobstoreStatus.NotFound =>
-    //     DestinationError
-    //       .invalidConfiguration[Json, InitError](
-    //         destinationType,
-    //         sanitizedConfig,
-    //         ZNel("Upload bucket does not exist"))
-    //       .asLeft
+  //     case BlobstoreStatus.NotFound =>
+  //       DestinationError
+  //         .invalidConfiguration[Json, InitError](
+  //           destinationType,
+  //           sanitizedConfig,
+  //           ZNel("Upload bucket does not exist"))
+  //         .asLeft
 
-    //   case BlobstoreStatus.NoAccess =>
-    //     DestinationError
-    //       .accessDenied[Json, InitError](
-    //         destinationType,
-    //         sanitizedConfig,
-    //         "Access denied to upload bucket")
-    //       .asLeft
+  //     case BlobstoreStatus.NoAccess =>
+  //       DestinationError
+  //         .accessDenied[Json, InitError](
+  //           destinationType,
+  //           sanitizedConfig,
+  //           "Access denied to upload bucket")
+  //         .asLeft
 
-    //   case BlobstoreStatus.NotOk(msg) =>
-    //     DestinationError
-    //       .invalidConfiguration[Json, InitError](
-    //         destinationType,
-    //         sanitizedConfig,
-    //         ZNel(msg))
-    //       .asLeft
-    // }
+  //     case BlobstoreStatus.NotOk(msg) =>
+  //       DestinationError
+  //         .invalidConfiguration[Json, InitError](
+  //           destinationType,
+  //           sanitizedConfig,
+  //           ZNel(msg))
+  //         .asLeft
+  //   }
 
   private def s3Client[F[_]: Concurrent](
       accessKey: AccessKey,
