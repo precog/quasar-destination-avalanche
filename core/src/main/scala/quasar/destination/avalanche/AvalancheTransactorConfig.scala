@@ -54,6 +54,11 @@ object AvalancheTransactorConfig {
         driverConfig,
         PoolSize,
         connectionReadOnly = false)
-      .copy(connectionMaxLifetime = MaxLifetime)
+      .copy(
+        connectionMaxLifetime = MaxLifetime,
+        // negative duration means
+        // skip all initialization checks and start the pool without delay
+        // see ch11655
+        connectionInitFailTimeout = -1.second)
   }
 }
