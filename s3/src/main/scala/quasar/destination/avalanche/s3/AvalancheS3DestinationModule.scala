@@ -18,7 +18,7 @@ package quasar.destination.avalanche.s3
 
 import quasar.destination.avalanche._
 
-import scala.{Int, Unit}
+import scala.Int
 import scala.util.{Either, Right}
 
 import java.lang.String
@@ -33,8 +33,6 @@ import cats.effect.{
   Resource,
   Timer
 }
-import cats.implicits._
-
 import doobie.Transactor
 
 import org.slf4s.Logger
@@ -44,7 +42,6 @@ import quasar.blobstore.s3.{
   S3DeleteService,
   S3PutService,
   AccessKey,
-  Bucket,
   Region,
   SecretKey
 }
