@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 import java.lang.String
 import java.net.URI
 
-import quasar.plugin.jdbc.{JdbcDriverConfig, TransactorConfig}
+import quasar.plugin.jdbc.{JdbcDriverConfig, PoolInitMode, TransactorConfig}
 
 object AvalancheTransactorConfig {
   val IngresDriverFqcn: String = "com.ingres.jdbc.IngresDriver"
@@ -54,6 +54,8 @@ object AvalancheTransactorConfig {
         driverConfig,
         PoolSize,
         connectionReadOnly = false)
-      .copy(connectionMaxLifetime = MaxLifetime)
+      .copy(
+        connectionMaxLifetime = MaxLifetime,
+        connectionPoolInitMode = PoolInitMode.DoNotValidate)
   }
 }

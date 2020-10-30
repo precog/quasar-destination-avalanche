@@ -46,8 +46,7 @@ import quasar.connector.MonadResourceErr
 object AvalancheAzureDestination {
   def apply[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: AvalancheAzureConfig,
-      refContainerClient: Ref[F, Expires[BlobContainerAsyncClient]],
-      refreshToken: F[Unit],
+      clientMgr: F[(Ref[F,Expires[BlobContainerAsyncClient]], F[Unit])],
       xa: Transactor[F],
       logger: Logger)
       : Destination[F] = {
@@ -65,8 +64,9 @@ object AvalancheAzureDestination {
     val putService =
       Kleisli[F, (BlobPath, Stream[F, Byte]), Int] { args =>
         for {
+          (refClient, refreshToken) <- clientMgr
           _ <- refreshToken
-          containerClient <- refContainerClient.get
+          containerClient <- refClient.get
           put = AzurePutService.mk[F](containerClient.value)
           result <- put(args)
         } yield result
@@ -75,8 +75,9 @@ object AvalancheAzureDestination {
     val deleteService =
       Kleisli[F, BlobPath, BlobstoreStatus] { path =>
         for {
+          (refClient, refreshToken) <- clientMgr
           _ <- refreshToken
-          containerClient <- refContainerClient.get
+          containerClient <- refClient.get
           delete = AzureDeleteService.mk[F](containerClient.value)
           result <- delete(path)
         } yield result
