@@ -1,5 +1,5 @@
 {
-  "precog-quasar": "193.0.0",
+  "precog-quasar": "193.1.0",
   "precog-async-blobstore": "4.0.3",
-  "precog-quasar-plugin-jdbc": "0.22.0"
+  "precog-quasar-plugin-jdbc": "0.22.1"
 }
