@@ -115,19 +115,23 @@ package object avalanche {
         .queryWithLogHandler[Int](logHandler)
     }
 
+    def grantAllTableUpdate: Update0 =
+      (fr"GRANT ALL PRIVILEGES ON TABLE" ++ Fragment.const(tableName) ++ fr"TO group dbadmingrp")
+        .updateWithLogHandler(logHandler)
+
     writeMode match {
       case WriteMode.Replace =>
-        dropTableUpdate.run >> createTableUpdate.run
+        dropTableUpdate.run >> createTableUpdate.run >> grantAllTableUpdate.run
 
       case WriteMode.Create =>
-        createTableUpdate.run
+        createTableUpdate.run >> grantAllTableUpdate.run
 
       case WriteMode.Append =>
         tableExistsQuery.option flatMap { result =>
           if (result.exists(_ == 1))
             0.pure[ConnectionIO]
           else
-            createTableUpdate.run
+            createTableUpdate.run >> grantAllTableUpdate.run
         }
 
       case WriteMode.Truncate =>
@@ -135,7 +139,7 @@ package object avalanche {
           if (result.exists(_ == 1))
             truncateTableUpdate.run
           else
-            createTableUpdate.run
+            createTableUpdate.run >> grantAllTableUpdate.run
         }
     }
   }
