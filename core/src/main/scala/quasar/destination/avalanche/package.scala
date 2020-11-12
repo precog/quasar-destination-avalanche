@@ -37,6 +37,8 @@ import quasar.connector.render.RenderConfig
 package object avalanche {
   type TableName = String
 
+  val GranteeDbadminGrp: Fragment = Fragment.const("group dbadmingrp")
+
   val AvalancheRenderConfig: RenderConfig.Csv =
     RenderConfig.Csv(
       includeHeader = false,
@@ -116,22 +118,24 @@ package object avalanche {
     }
 
     def grantAllTableUpdate: Update0 =
-      (fr"GRANT ALL PRIVILEGES ON TABLE" ++ Fragment.const(tableName) ++ fr"TO group dbadmingrp")
+      (fr"GRANT ALL PRIVILEGES ON TABLE" ++ Fragment.const(tableName) ++ fr"TO" ++ GranteeDbadminGrp)
         .updateWithLogHandler(logHandler)
+
+    val initializeTable: ConnectionIO[Int] = createTableUpdate.run >> grantAllTableUpdate.run         
 
     writeMode match {
       case WriteMode.Replace =>
-        dropTableUpdate.run >> createTableUpdate.run >> grantAllTableUpdate.run
+        dropTableUpdate.run >> initializeTable
 
       case WriteMode.Create =>
-        createTableUpdate.run >> grantAllTableUpdate.run
+        initializeTable
 
       case WriteMode.Append =>
         tableExistsQuery.option flatMap { result =>
           if (result.exists(_ == 1))
             0.pure[ConnectionIO]
           else
-            createTableUpdate.run >> grantAllTableUpdate.run
+            initializeTable
         }
 
       case WriteMode.Truncate =>
@@ -139,7 +143,7 @@ package object avalanche {
           if (result.exists(_ == 1))
             truncateTableUpdate.run
           else
-            createTableUpdate.run >> grantAllTableUpdate.run
+            initializeTable
         }
     }
   }
