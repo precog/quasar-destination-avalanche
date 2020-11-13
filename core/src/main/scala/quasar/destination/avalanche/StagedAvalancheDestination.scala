@@ -40,7 +40,7 @@ import quasar.api.destination.DestinationType
 import quasar.blobstore.services.{DeleteService, PutService}
 import quasar.blobstore.paths.{BlobPath, PathElem}
 import quasar.connector.MonadResourceErr
-import quasar.plugin.jdbc.Slf4sLogHandler
+import quasar.lib.jdbc.Slf4sLogHandler
 
 final class StagedAvalancheDestination[F[_]: Sync: MonadResourceErr: Timer](
     val destinationType: DestinationType,

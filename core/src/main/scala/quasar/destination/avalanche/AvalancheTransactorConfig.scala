@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 import java.lang.String
 import java.net.URI
 
-import quasar.plugin.jdbc.{JdbcDriverConfig, PoolInitMode, TransactorConfig}
+import quasar.lib.jdbc.{JdbcDriverConfig, PoolInitMode, TransactorConfig}
 
 object AvalancheTransactorConfig {
   val IngresDriverFqcn: String = "com.ingres.jdbc.IngresDriver"

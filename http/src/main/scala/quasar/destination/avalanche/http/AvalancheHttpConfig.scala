@@ -25,7 +25,7 @@ import java.net.URI
 
 import argonaut._, Argonaut._
 
-import quasar.plugin.jdbc.Redacted
+import quasar.lib.jdbc.Redacted
 
 final case class AvalancheHttpConfig(
     connectionUri: URI,

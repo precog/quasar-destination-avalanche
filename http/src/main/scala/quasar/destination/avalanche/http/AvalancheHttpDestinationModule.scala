@@ -33,7 +33,7 @@ import org.slf4s.Logger
 import quasar.api.destination.DestinationType
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.plugin.jdbc.TransactorConfig
+import quasar.lib.jdbc.TransactorConfig
 
 object AvalancheHttpDestinationModule extends AvalancheDestinationModule[AvalancheHttpConfig] {
 

@@ -47,7 +47,7 @@ import quasar.blobstore.s3.{
 }
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.plugin.jdbc.TransactorConfig
+import quasar.lib.jdbc.TransactorConfig
 
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}

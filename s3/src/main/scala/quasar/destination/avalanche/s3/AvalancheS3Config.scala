@@ -26,7 +26,7 @@ import java.net.URI
 import argonaut._, Argonaut._
 
 import quasar.blobstore.s3.{AccessKey, Bucket, Region, SecretKey}
-import quasar.plugin.jdbc.Redacted
+import quasar.lib.jdbc.Redacted
 
 final case class BucketConfig(
     bucket: Bucket,
