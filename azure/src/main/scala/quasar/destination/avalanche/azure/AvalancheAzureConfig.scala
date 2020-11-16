@@ -33,7 +33,7 @@ import quasar.blobstore.azure.{
   StorageUrl,
   TenantId
 }
-import quasar.plugin.jdbc.Redacted
+import quasar.lib.jdbc.Redacted
 
 import argonaut._, Argonaut._
 import cats.implicits._

@@ -35,7 +35,7 @@ import org.slf4s.Logger
 
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.PushmiPullyu
-import quasar.plugin.jdbc.Slf4sLogHandler
+import quasar.lib.jdbc.Slf4sLogHandler
 
 final class AvalancheHttpDestination[F[_]: MonadResourceErr: Sync: Timer](
     writeMode: WriteMode,

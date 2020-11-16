@@ -41,7 +41,7 @@ import quasar.api.destination.DestinationType
 import quasar.blobstore.azure.Azure
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.plugin.jdbc.TransactorConfig
+import quasar.lib.jdbc.TransactorConfig
 
 object AvalancheAzureDestinationModule extends AvalancheDestinationModule[AvalancheAzureConfig] {
 

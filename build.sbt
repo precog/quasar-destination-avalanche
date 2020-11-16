@@ -17,7 +17,7 @@ lazy val asyncBlobstoreVersion =
   Def.setting[String](managedVersions.value("precog-async-blobstore"))
 
 lazy val quasarPluginJdbcVersion =
-  Def.setting[String](managedVersions.value("precog-quasar-plugin-jdbc"))
+  Def.setting[String](managedVersions.value("precog-quasar-lib-jdbc"))
 
 lazy val specs2Version = "4.9.4"
 
@@ -45,7 +45,7 @@ lazy val core = project
     publishAsOSSProject := true,
     libraryDependencies ++= Seq(
       "com.precog" %% "async-blobstore-core" % asyncBlobstoreVersion.value,
-      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "quasar-api" % quasarVersion.value,
       "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
       "org.specs2" %% "specs2-core" % specs2Version % Test),
@@ -67,7 +67,7 @@ lazy val azure = project
     quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.azure.AvalancheAzureDestinationModule$"),
     quasarPluginDependencies ++= Seq(
-      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "async-blobstore-azure" % asyncBlobstoreVersion.value),
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % specs2Version % Test))
@@ -83,7 +83,7 @@ lazy val s3 = project
     quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.s3.AvalancheS3DestinationModule$"),
     quasarPluginDependencies ++= Seq(
-      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
+      "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "async-blobstore-s3" % asyncBlobstoreVersion.value),
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % specs2Version % Test))
@@ -99,7 +99,7 @@ lazy val http = project
     quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.destination.avalanche.http.AvalancheHttpDestinationModule$"),
     quasarPluginDependencies ++= Seq(
-      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value),
+      "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value),
     libraryDependencies ++= Seq(
       "org.specs2" %% "specs2-core" % specs2Version % Test))
   .enablePlugins(QuasarPlugin)
