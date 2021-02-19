@@ -73,6 +73,9 @@ object AvalancheType {
   final case object ANSIDATE extends AvalancheType {
     def fragment = fr0"ANSIDATE"
   }
+  final case object OFFSET_DATE extends AvalancheType {
+    def fragment = fr0"TIMESTAMP(0) WITH TIME ZONE"
+  }
   final case class TIME(precision: Int, zoning: TimeZoning) extends AvalancheType {
     def fragment = Fragment.const(s"TIME(${precision})") ++ zoning.fragment
   }

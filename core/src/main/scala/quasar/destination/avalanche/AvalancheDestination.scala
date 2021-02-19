@@ -61,7 +61,7 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
     case ColumnType.LocalDate =>
       TypeCoercion.Satisfied(NonEmptyList.one(Id.ANSIDATE))
     case ColumnType.OffsetDate =>
-      TypeCoercion.Unsatisfied(List(ColumnType.OffsetDateTime, ColumnType.LocalDate), None)
+      TypeCoercion.Satisfied(NonEmptyList.one(Id.OFFSET_DATE))
     case ColumnType.LocalDateTime =>
       TypeCoercion.Satisfied(NonEmptyList.of(Id.TIMESTAMP, Id.TIMESTAMP_LOCAL))
     case ColumnType.OffsetDateTime =>
@@ -80,8 +80,8 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
         Id.MONEY))
     case ColumnType.String =>
       TypeCoercion.Satisfied(NonEmptyList.of(
-        Id.NCHAR,
         Id.NVARCHAR,
+        Id.NCHAR,
         Id.INTERVAL_DAY,
         Id.INTERVAL_YEAR,
         Id.IPV4,
@@ -139,6 +139,8 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
       Left(Type.INTERVAL_YEAR)
     case Id.ANSIDATE =>
       Left(Type.ANSIDATE)
+    case Id.OFFSET_DATE =>
+      Left(Type.OFFSET_DATE)
   }
 
   private def stepOne: IntegerStep = IntegerStep.Factor(0, 1)
