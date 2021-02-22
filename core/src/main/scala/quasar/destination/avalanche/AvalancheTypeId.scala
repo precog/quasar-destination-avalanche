@@ -48,6 +48,7 @@ object AvalancheTypeId {
   final case object IPV4 extends AvalancheTypeId(20)
   final case object IPV6 extends AvalancheTypeId(21)
   final case object UUID extends AvalancheTypeId(22)
+  final case object OFFSET_DATE extends AvalancheTypeId(23)
 
   val ordinalPrism: Prism[Int, AvalancheTypeId] =
     Prism.partial[Int, AvalancheTypeId]({
@@ -74,6 +75,7 @@ object AvalancheTypeId {
       case IPV4.ordinal => IPV4
       case IPV6.ordinal => IPV6
       case UUID.ordinal => UUID
+      case OFFSET_DATE.ordinal => OFFSET_DATE
     })(_.ordinal)
 
   val label = Label[AvalancheTypeId] {
@@ -100,5 +102,6 @@ object AvalancheTypeId {
     case IPV4 => "IPV4"
     case IPV6 => "IPV6"
     case UUID => "UUID"
+    case OFFSET_DATE => "TIMESTAMP(0) WITH TIME ZONE"
   }
 }

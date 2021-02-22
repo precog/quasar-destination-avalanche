@@ -24,14 +24,13 @@ import java.lang.{String, System}
 import java.net.URI
 import java.time.format.DateTimeFormatter
 
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.NonEmptyList
 import cats.implicits._
 
 import doobie._
 import doobie.implicits._
 import doobie.util.log.{LogHandler => _, _}
 
-import quasar.api.ColumnType
 import quasar.connector.render.RenderConfig
 
 package object avalanche {
@@ -46,25 +45,8 @@ package object avalanche {
       offsetTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS xxx"),
       localDateTimeFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS"),
       localDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd"),
+      offsetDateFormat = DateTimeFormatter.ofPattern("uuuu-MM-dd 00:00:00 xxx"),
       localTimeFormat = DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
-
-  def columnTypeToAvalanche(ct: ColumnType.Scalar)
-      : ValidatedNel[ColumnType.Scalar, Fragment] =
-    ct match {
-      case ColumnType.Null => fr0"INTEGER1".validNel
-      case ColumnType.Boolean => fr0"BOOLEAN".validNel
-      case ColumnType.LocalTime => fr0"TIME(3)".validNel
-      case ColumnType.OffsetTime => fr0"TIME(3) WITH TIME ZONE".validNel
-      case ColumnType.LocalDate => fr0"ANSIDATE".validNel
-      case od @ ColumnType.OffsetDate => od.invalidNel
-      case ColumnType.LocalDateTime => fr0"TIMESTAMP(3)".validNel
-      case ColumnType.OffsetDateTime => fr0"TIMESTAMP(3) WITH TIME ZONE".validNel
-      // Avalanche supports intervals, but not ISO 8601 intervals, which is what
-      // Quasar produces
-      case i @ ColumnType.Interval => i.invalidNel
-      case ColumnType.Number => fr0"DECIMAL(33, 3)".validNel
-      case ColumnType.String => fr0"NVARCHAR(512)".validNel
-    }
 
   // Ingres accepts double quotes as part of identifiers, but they must
   // be repeated twice. So we duplicate all quotes
@@ -121,7 +103,7 @@ package object avalanche {
       (fr"GRANT ALL PRIVILEGES ON TABLE" ++ Fragment.const(tableName) ++ fr"TO" ++ GranteeDbadminGrp)
         .updateWithLogHandler(logHandler)
 
-    val initializeTable: ConnectionIO[Int] = createTableUpdate.run >> grantAllTableUpdate.run         
+    val initializeTable: ConnectionIO[Int] = createTableUpdate.run >> grantAllTableUpdate.run
 
     writeMode match {
       case WriteMode.Replace =>
