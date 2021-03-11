@@ -16,13 +16,13 @@
 
 package quasar.destination.avalanche
 
-import scala.{Int, Some, StringContext}
+import scala.{Int, None, Some, StringContext}
 import scala.concurrent.duration._
 
 import java.lang.String
 import java.net.URI
 
-import quasar.lib.jdbc.{JdbcDriverConfig, PoolInitMode, TransactorConfig}
+import quasar.lib.jdbc.{JdbcDriverConfig, TransactorConfig}
 
 object AvalancheTransactorConfig {
   val IngresDriverFqcn: String = "com.ingres.jdbc.IngresDriver"
@@ -49,13 +49,6 @@ object AvalancheTransactorConfig {
     val driverConfig =
       JdbcDriverConfig.JdbcDriverManagerConfig(fullUrl, Some(IngresDriverFqcn))
 
-    TransactorConfig
-      .withDefaultTimeouts(
-        driverConfig,
-        PoolSize,
-        connectionReadOnly = false)
-      .copy(
-        connectionMaxLifetime = MaxLifetime,
-        connectionPoolInitMode = PoolInitMode.DoNotValidate)
+    TransactorConfig(driverConfig, None)
   }
 }
