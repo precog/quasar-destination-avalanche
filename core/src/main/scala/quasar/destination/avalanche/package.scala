@@ -94,7 +94,7 @@ package object avalanche {
 
     def tableExistsQuery: Query0[Int] = {
       // TODO: yikes, we need to better control sanitization
-      val table = tableName.toLowerCase.substring(1, tableName.length() - 1)
+      val table = tableName.substring(1, tableName.length() - 1)
       (fr0"SELECT COUNT(*) AS exists_flag FROM iitables WHERE table_name = '" ++ Fragment.const(table) ++ fr0"'")
         .queryWithLogHandler[Int](logHandler)
     }
