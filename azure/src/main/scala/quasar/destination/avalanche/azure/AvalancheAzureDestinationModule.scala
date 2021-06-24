@@ -69,6 +69,6 @@ object AvalancheAzureDestinationModule extends AvalancheDestinationModule[Avalan
     val clientMgr = Azure.refContainerClient(AvalancheAzureConfig.toConfig(config))
     val dest = AvalancheAzureDestination[F](config, clientMgr, transactor, log)
 
-    Resource.liftF(dest.asRight[InitError].pure[F])
+    Resource.eval(dest.asRight[InitError].pure[F])
   }
 }
