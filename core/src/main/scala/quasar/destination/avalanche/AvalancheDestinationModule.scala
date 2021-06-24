@@ -32,7 +32,7 @@ import doobie._
 import org.slf4s.{Logger, LoggerFactory}
 
 import quasar.api.destination.{DestinationError => DE}
-import quasar.connector.MonadResourceErr
+import quasar.connector.{GetAuth, MonadResourceErr}
 import quasar.connector.destination._
 import quasar.lib.jdbc.{ManagedTransactor, Redacted, TransactorConfig}
 
@@ -53,7 +53,8 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
 
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: Json,
-      pushPull: PushmiPullyu[F])
+      pushPull: PushmiPullyu[F],
+      auth: GetAuth[F])
       : Resource[F, Either[InitError, Destination[F]]] = {
 
     val id = s"${destinationType.name.value}-v${destinationType.version}"
