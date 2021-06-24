@@ -42,8 +42,10 @@ final case class AvalancheAzureConfig(
     accountName: AccountName,
     containerName: ContainerName,
     connectionUri: URI,
-    username: Username,
-    password: ClusterPassword,
+    username: Option[Username],
+    password: Option[ClusterPassword],
+    googleAuth: Option[GoogleAuth],
+    salesforceAuth: Option[SalesforceAuth],
     writeMode: WriteMode,
     azureCredentials: AzureCredentials.ActiveDirectory) {
 
@@ -55,7 +57,9 @@ final case class AvalancheAzureConfig(
           TenantId(Redacted),
           ClientSecret(Redacted)),
       password =
-        ClusterPassword(Redacted))
+        password.as(ClusterPassword(Redacted)),
+      googleAuth = googleAuth.map(_.sanitized),
+      salesforceAuth = salesforceAuth.map(_.sanitized))
 }
 
 object AvalancheAzureConfig {
@@ -85,8 +89,10 @@ object AvalancheAzureConfig {
         ("accountName" := c.accountName.value) ->:
         ("containerName" := c.containerName.value) ->:
         ("connectionUri" := c.connectionUri) ->:
-        ("username" := c.username) ->:
-        ("clusterPassword" := c.password) ->:
+        ("username" :=? c.username) ->?:
+        ("clusterPassword" :=? c.password) ->?:
+        ("googleAuth" :=? c.password) ->?:
+        ("salesforceAuth" :=? c.password) ->?:
         ("writeMode" := c.writeMode) ->:
         ("credentials" := c.azureCredentials) ->:
         jEmptyObject,
@@ -95,8 +101,10 @@ object AvalancheAzureConfig {
          accountName <- (c --\ "accountName").as[String]
          containerName <- (c --\ "containerName").as[String]
          connectionUri <- (c --\ "connectionUri").as[URI]
-         username <- (c --\ "username").as[Username]
-         clusterPassword <- (c --\ "clusterPassword").as[ClusterPassword]
+         username <- (c --\ "username").as[Option[Username]]
+         clusterPassword <- (c --\ "clusterPassword").as[Option[ClusterPassword]]
+         googleAuth <- (c --\ "googleAuth").as[Option[GoogleAuth]]
+         salesforceAuth <- (c --\ "salesforceAuth").as[Option[SalesforceAuth]]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
        } yield AvalancheAzureConfig(
@@ -105,6 +113,8 @@ object AvalancheAzureConfig {
          connectionUri,
          username,
          clusterPassword,
+         googleAuth,
+         salesforceAuth,
          writeMode.getOrElse(WriteMode.Replace),
          credentials)))
 }

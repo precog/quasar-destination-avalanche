@@ -25,21 +25,29 @@ import java.net.URI
 
 import argonaut._, Argonaut._
 
+import cats.syntax.functor._
+
 import quasar.lib.jdbc.Redacted
 
 final case class AvalancheHttpConfig(
     connectionUri: URI,
-    username: Username,
-    clusterPassword: ClusterPassword,
+    username: Option[Username],
+    clusterPassword: Option[ClusterPassword],
+    googleAuth: Option[GoogleAuth],
+    salesforceAuth: Option[SalesforceAuth],
     writeMode: WriteMode,
     baseUrl: Option[URI]) {
 
   def sanitized: AvalancheHttpConfig =
-    copy(clusterPassword = ClusterPassword(Redacted))
+    copy(
+      clusterPassword =
+        clusterPassword.as(ClusterPassword(Redacted)),
+      googleAuth = googleAuth.map(_.sanitized),
+      salesforceAuth = salesforceAuth.map(_.sanitized))
 }
 
 object AvalancheHttpConfig {
   implicit val avalancheHttpConfigCodecJson: CodecJson[AvalancheHttpConfig] =
-    casecodec5(AvalancheHttpConfig.apply, AvalancheHttpConfig.unapply)(
-      "connectionUri", "username", "clusterPassword", "writeMode", "baseUrl")
+    casecodec7(AvalancheHttpConfig.apply, AvalancheHttpConfig.unapply)(
+      "connectionUri", "username", "clusterPassword", "googleAuth", "salesforceAuth", "writeMode", "baseUrl")
 }

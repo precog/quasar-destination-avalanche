@@ -28,6 +28,8 @@ import argonaut._, Argonaut._
 import quasar.blobstore.s3.{AccessKey, Bucket, Region, SecretKey}
 import quasar.lib.jdbc.Redacted
 
+import cats.syntax.functor._
+
 final case class BucketConfig(
     bucket: Bucket,
     accessKey: AccessKey,
@@ -37,23 +39,28 @@ final case class BucketConfig(
 final case class AvalancheS3Config(
     bucketConfig: BucketConfig,
     connectionUri: URI,
-    username: Username,
-    clusterPassword: ClusterPassword,
+    username: Option[Username],
+    clusterPassword: Option[ClusterPassword],
+    googleAuth: Option[GoogleAuth],
+    salesforceAuth: Option[SalesforceAuth],
     writeMode: WriteMode) {
 
   def sanitized: AvalancheS3Config =
     copy(
       clusterPassword =
-        ClusterPassword(Redacted),
+        clusterPassword.as(ClusterPassword(Redacted)),
       bucketConfig =
         BucketConfig(
           bucketConfig.bucket,
           AccessKey(Redacted),
           SecretKey(Redacted),
-          Region(Redacted)))
+          Region(Redacted)),
+      googleAuth = googleAuth.map(_.sanitized),
+      salesforceAuth = salesforceAuth.map(_.sanitized))
 }
 
 object AvalancheS3Config {
+
 
   private implicit val bucketConfigCodecJson: CodecJson[BucketConfig] = {
     val encode: BucketConfig => Json = {
@@ -81,8 +88,8 @@ object AvalancheS3Config {
   }
 
   implicit def avalancheConfigCodecJson: CodecJson[AvalancheS3Config] =
-    casecodec5[BucketConfig, URI, Username, ClusterPassword, WriteMode, AvalancheS3Config](
+    casecodec7[BucketConfig, URI, Option[Username], Option[ClusterPassword], Option[GoogleAuth], Option[SalesforceAuth], WriteMode, AvalancheS3Config](
       AvalancheS3Config.apply,
       AvalancheS3Config.unapply)(
-      "bucketConfig", "connectionUri", "username", "clusterPassword", "writeMode")
+      "bucketConfig", "connectionUri", "username", "clusterPassword", "googleAuth", "salesforceAuth", "writeMode")
 }
