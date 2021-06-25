@@ -86,7 +86,7 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
         bucketCfg.region))
 
       // skip validation for now, see ch11655
-      // _ <- EitherT(Resource.liftF(validBucket[F](client, config.sanitized.asJson, bucketCfg.bucket)))
+      // _ <- EitherT(Resource.eval(validBucket[F](client, config.sanitized.asJson, bucketCfg.bucket)))
 
       deleteService = S3DeleteService(client, bucketCfg.bucket)
 

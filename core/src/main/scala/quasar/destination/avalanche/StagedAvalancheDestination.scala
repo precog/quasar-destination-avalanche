@@ -74,7 +74,7 @@ final class StagedAvalancheDestination[F[_]: Sync: MonadResourceErr: Timer](
 
   private def stageBytes(bytes: Stream[F, Byte]): Resource[F, URI] =
     for {
-      fileName <- Resource.liftF(Sync[F].delay(s"precog-${UUID.randomUUID}.csv.gz"))
+      fileName <- Resource.eval(Sync[F].delay(s"precog-${UUID.randomUUID}.csv.gz"))
       blobPath = BlobPath(List(PathElem(fileName)))
       uri = stagedUri(FileName(fileName))
 
