@@ -21,8 +21,10 @@ import scala.concurrent.duration._
 
 import java.lang.String
 import java.net.URI
+import java.nio.charset.Charset
 
 import quasar.lib.jdbc.{JdbcDriverConfig, TransactorConfig}
+import quasar.connector.Credentials
 
 object AvalancheTransactorConfig {
   val IngresDriverFqcn: String = "com.ingres.jdbc.IngresDriver"
@@ -30,15 +32,15 @@ object AvalancheTransactorConfig {
   val MaxLifetime: FiniteDuration = 3.minutes
   val PoolSize: Int = 8
 
-  def apply(
+  private[this] def fromDetails(
       connectionUrl: URI,
       username: Username,
-      password: ClusterPassword)
+      password: String)
       : TransactorConfig = {
 
     val fullUrl = {
       val u = connectionUrl.toString
-      val auth = s"UID=${username.asString};PWD=${password.asString}"
+      val auth = s"UID=${username.asString};PWD=$password"
 
       if (u.endsWith(";"))
         URI.create(u + auth)
@@ -51,4 +53,25 @@ object AvalancheTransactorConfig {
 
     TransactorConfig(driverConfig, None)
   }
+
+  def apply(
+      connectionUrl: URI,
+      username: Username,
+      password: ClusterPassword)
+      : TransactorConfig = 
+        fromDetails(connectionUrl, username, password.asString) 
+
+  private val utf8 = Charset.forName("UTF-8")
+
+  def apply(
+    connectionUrl: URI,
+    username: Username,
+    token: Credentials.Token
+  ): TransactorConfig = 
+    fromDetails(
+      connectionUrl, 
+      username, 
+      s"access_token=${new String(token.toByteArray, utf8)}"
+    )
+
 }

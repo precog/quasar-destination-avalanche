@@ -59,11 +59,14 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
   val destinationType: DestinationType =
     DestinationType("avalanche-s3", 1L)
 
-  def transactorConfig(config: AvalancheS3Config): Either[NonEmptyList[String], TransactorConfig] =
-    Right(AvalancheTransactorConfig(
+  def connectionConfig(config: AvalancheS3Config): ConnectionConfig = 
+    ConnectionConfig(
       config.connectionUri,
       config.username,
-      config.clusterPassword))
+      config.clusterPassword,
+      config.googleAuth,
+      config.salesforceAuth
+    )
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheS3Config].fold(

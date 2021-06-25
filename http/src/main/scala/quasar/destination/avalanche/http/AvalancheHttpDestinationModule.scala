@@ -40,11 +40,14 @@ object AvalancheHttpDestinationModule extends AvalancheDestinationModule[Avalanc
   val destinationType: DestinationType =
     DestinationType("avalanche-http", 1L)
 
-  def transactorConfig(config: AvalancheHttpConfig): Either[NonEmptyList[String], TransactorConfig] =
-    Right(AvalancheTransactorConfig(
+  def connectionConfig(config: AvalancheHttpConfig): ConnectionConfig = 
+    ConnectionConfig(
       config.connectionUri,
       config.username,
-      config.clusterPassword))
+      config.clusterPassword,
+      config.googleAuth,
+      config.salesforceAuth
+    )
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheHttpConfig].fold(

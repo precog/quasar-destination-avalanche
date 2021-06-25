@@ -48,11 +48,14 @@ object AvalancheAzureDestinationModule extends AvalancheDestinationModule[Avalan
   val destinationType: DestinationType =
     DestinationType("avalanche-azure", 1L)
 
-  def transactorConfig(config: AvalancheAzureConfig): Either[NonEmptyList[String], TransactorConfig] =
-    Right(AvalancheTransactorConfig(
+  def connectionConfig(config: AvalancheAzureConfig): ConnectionConfig = 
+    ConnectionConfig(
       config.connectionUri,
       config.username,
-      config.password))
+      config.password,
+      config.googleAuth,
+      config.salesforceAuth
+    )
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheAzureConfig].fold(
