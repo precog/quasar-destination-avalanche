@@ -41,7 +41,9 @@ object AvalancheHttpConfigSpec extends Specification {
       AvalancheHttpConfig(
         URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         Username("myuser"),
-        ClusterPassword("super secret"),
+        Some(ClusterPassword("super secret")),
+        None,
+        None,
         Truncate,
         Some(URI.create("http://example.com/precog")))
 
@@ -61,7 +63,9 @@ object AvalancheHttpConfigSpec extends Specification {
       AvalancheHttpConfig(
         URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         Username("myuser"),
-        ClusterPassword("super secret"),
+        Some(ClusterPassword("super secret")),
+        None,
+        None,
         Create,
         None)
 
@@ -69,4 +73,68 @@ object AvalancheHttpConfigSpec extends Specification {
 
     cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
   }
+
+  "avalanche-http valid salesforceAuthId is parsed" >> {
+    val json = Json(
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "salesforceAuthId" := "00000000-0000-0000-0000-000000000000",
+      "writeMode" := "create")
+
+    val cfg =
+      AvalancheHttpConfig(
+        URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username.DbUser,
+        None,
+        None,
+        Some(SalesforceAuth(UUID0)),
+        Create,
+        None)
+
+    json.as[AvalancheHttpConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
+  }
+
+  "avalanche-http valid googleAuth is parsed" >> {
+    val json = Json(
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "googleAuthId" := "00000000-0000-0000-0000-000000000000",
+      "writeMode" := "create")
+
+    val cfg =
+      AvalancheHttpConfig(
+        URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username.DbUser,
+        None,
+        Some(GoogleAuth(UUID0)),
+        None,
+        Create,
+        None)
+
+    json.as[AvalancheHttpConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
+  }
+
+  "avalanche-http clusterPassword is optional" >> {
+    val json = Json(
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "username" := "myuser",
+      "writeMode" := "create")
+
+    val cfg =
+      AvalancheHttpConfig(
+        URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("myuser"),
+        None,
+        None,
+        None,
+        Create,
+        None)
+
+    json.as[AvalancheHttpConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
+  }
+
 }

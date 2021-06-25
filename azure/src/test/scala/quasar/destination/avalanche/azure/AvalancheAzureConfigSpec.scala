@@ -26,6 +26,8 @@ import org.specs2.mutable.Specification
 
 import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
 
+import scala.{Some, None}
+
 object AvalancheAzureConfigSpec extends Specification {
   import WriteMode._
 
@@ -47,7 +49,9 @@ object AvalancheAzureConfigSpec extends Specification {
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         Username("my user"),
-        ClusterPassword("super secret"),
+        Some(ClusterPassword("super secret")),
+        None,
+        None,
         Replace,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -57,6 +61,7 @@ object AvalancheAzureConfigSpec extends Specification {
     initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
 
     cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
   }
 
   "avalanche-azure parses and prints a valid legacy config without username" >> {
@@ -77,7 +82,9 @@ object AvalancheAzureConfigSpec extends Specification {
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         Username("dbuser"),
-        ClusterPassword("super secret"),
+        Some(ClusterPassword("super secret")),
+        None,
+        None,
         Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -108,7 +115,41 @@ object AvalancheAzureConfigSpec extends Specification {
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
         Username("my user"),
-        ClusterPassword("super secret"),
+        Some(ClusterPassword("super secret")),
+        None,
+        None,
+        Truncate,
+        AzureCredentials.ActiveDirectory(
+          ClientId("client-id-uuid"),
+          TenantId("tenant-id-uuid"),
+          ClientSecret("client-secret-string")))
+
+    initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
+  } 
+
+  "avalanche-azure parses and prints a valid config with google auth and no other auth" >> {
+    val initialJson = Json.obj(
+      "accountName" := "foo",
+      "containerName" := "bar",
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "googleAuthId" := "00000000-0000-0000-0000-000000000000",
+      "writeMode" := "truncate",
+      "credentials" := Json.obj(
+        "clientId" := "client-id-uuid",
+        "tenantId" := "tenant-id-uuid",
+        "clientSecret" := "client-secret-string"))
+
+    val cfg =
+      AvalancheAzureConfig(
+        AccountName("foo"),
+        ContainerName("bar"),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("dbuser"),
+        None,
+        Some(GoogleAuth(UUID0)),
+        None,
         Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -119,4 +160,37 @@ object AvalancheAzureConfigSpec extends Specification {
 
     cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
   }
+
+  "avalanche-azure parses and prints a valid config with salesforce auth and no other auth" >> {
+    val initialJson = Json.obj(
+      "accountName" := "foo",
+      "containerName" := "bar",
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "salesforceAuthId" := "00000000-0000-0000-0000-000000000000",
+      "writeMode" := "truncate",
+      "credentials" := Json.obj(
+        "clientId" := "client-id-uuid",
+        "tenantId" := "tenant-id-uuid",
+        "clientSecret" := "client-secret-string"))
+
+    val cfg =
+      AvalancheAzureConfig(
+        AccountName("foo"),
+        ContainerName("bar"),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        Username("dbuser"),
+        None,
+        None,
+        Some(SalesforceAuth(UUID0)),
+        Truncate,
+        AzureCredentials.ActiveDirectory(
+          ClientId("client-id-uuid"),
+          TenantId("tenant-id-uuid"),
+          ClientSecret("client-secret-string")))
+
+    initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
+  }
+
 }

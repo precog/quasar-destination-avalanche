@@ -31,7 +31,7 @@ import quasar.lib.jdbc.Redacted
 
 final case class AvalancheHttpConfig(
     connectionUri: URI,
-    username: Option[Username],
+    username: Username,
     clusterPassword: Option[ClusterPassword],
     googleAuth: Option[GoogleAuth],
     salesforceAuth: Option[SalesforceAuth],
@@ -49,5 +49,5 @@ final case class AvalancheHttpConfig(
 object AvalancheHttpConfig {
   implicit val avalancheHttpConfigCodecJson: CodecJson[AvalancheHttpConfig] =
     casecodec7(AvalancheHttpConfig.apply, AvalancheHttpConfig.unapply)(
-      "connectionUri", "username", "clusterPassword", "googleAuth", "salesforceAuth", "writeMode", "baseUrl")
+      "connectionUri", "username", "clusterPassword", "googleAuthId", "salesforceAuthId", "writeMode", "baseUrl")
 }

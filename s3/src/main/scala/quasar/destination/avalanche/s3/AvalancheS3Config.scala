@@ -39,7 +39,7 @@ final case class BucketConfig(
 final case class AvalancheS3Config(
     bucketConfig: BucketConfig,
     connectionUri: URI,
-    username: Option[Username],
+    username: Username,
     clusterPassword: Option[ClusterPassword],
     googleAuth: Option[GoogleAuth],
     salesforceAuth: Option[SalesforceAuth],
@@ -88,8 +88,8 @@ object AvalancheS3Config {
   }
 
   implicit def avalancheConfigCodecJson: CodecJson[AvalancheS3Config] =
-    casecodec7[BucketConfig, URI, Option[Username], Option[ClusterPassword], Option[GoogleAuth], Option[SalesforceAuth], WriteMode, AvalancheS3Config](
+    casecodec7[BucketConfig, URI, Username, Option[ClusterPassword], Option[GoogleAuth], Option[SalesforceAuth], WriteMode, AvalancheS3Config](
       AvalancheS3Config.apply,
       AvalancheS3Config.unapply)(
-      "bucketConfig", "connectionUri", "username", "clusterPassword", "googleAuth", "salesforceAuth", "writeMode")
+      "bucketConfig", "connectionUri", "username", "clusterPassword", "googleAuthId", "salesforceAuthId", "writeMode")
 }
