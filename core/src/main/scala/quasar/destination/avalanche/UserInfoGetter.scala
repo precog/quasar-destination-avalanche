@@ -35,7 +35,6 @@ import org.http4s.syntax.literals._
 import scala.{Option, Some, None, StringContext, Either, Left, Right}
 
 import quasar.connector.{Credentials, GetAuth, ExternalCredentials}
-import quasar.api.destination.DestinationError
 
 object UserInfoGetter {
 
@@ -72,12 +71,9 @@ object UserInfoGetter {
   def fromSalesforce[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[String]] = 
     emailFromUserinfo[F](token, uri"https://login.salesforce.com/services/oauth2/userinfo")
 
-  type InitError = DestinationError.InitializationError[Json]
-
   def getToken[F[_]: Monad: Clock](
     getAuth: GetAuth[F], 
     key: UUID
-    // raiseInvalidConfError: String => InitError
   ): F[Either[String, Credentials.Token]] = {
 
     def verifyCreds(cred: Credentials): Either[String, Credentials.Token] = cred match {
