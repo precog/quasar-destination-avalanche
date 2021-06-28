@@ -43,7 +43,7 @@ case class AvalancheTransactorConfig(
 
     def getConfigForAuthKey(
       authKey: UUID, 
-      emailGetter: Credentials.Token => F[Option[String]]
+      emailGetter: Credentials.Token => F[Option[Email]]
     ): F[Either[String, TransactorConfig]] = 
         (
           for {
@@ -52,7 +52,7 @@ case class AvalancheTransactorConfig(
               emailGetter(token),
                 "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token."
             )
-          } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email), token)
+          } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email.asString), token)
         ).value
 
     (password, googleAuth, salesforceAuth) match {

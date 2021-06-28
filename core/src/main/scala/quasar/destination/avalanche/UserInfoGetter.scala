@@ -16,7 +16,7 @@
 
 package quasar.destination.avalanche
 
-import argonaut._, Argonaut._
+import argonaut._
 
 import cats._
 import cats.effect._
@@ -40,7 +40,7 @@ object UserInfoGetter {
 
   private val utf8 = StandardCharsets.UTF_8
 
-  private def emailFromUserinfo[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token, userinfoUrl: Uri): F[Option[String]] = {
+  private def emailFromUserinfo[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token, userinfoUrl: Uri): F[Option[Email]] = {
     val req = Request[F](
       uri = userinfoUrl,
       method = Method.GET,
@@ -59,16 +59,16 @@ object UserInfoGetter {
           .map(v => 
             (v -| "email")
               .flatMap(
-                _.as[String].toOption
+                _.as[Email].toOption
               )
           )
       )
   }
 
-  def fromGoogle[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[String]] = 
+  def fromGoogle[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[Email]] = 
     emailFromUserinfo[F](token, uri"https://openidconnect.googleapis.com/v1/userinfo")
 
-  def fromSalesforce[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[String]] = 
+  def fromSalesforce[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[Email]] = 
     emailFromUserinfo[F](token, uri"https://login.salesforce.com/services/oauth2/userinfo")
 
   def getToken[F[_]: Monad: Clock](
