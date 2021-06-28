@@ -141,7 +141,7 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
               raiseInvalidConfError
             ))
             email <- EitherT.fromOptionF(
-              UserInfoGetter.fromGoogle[F](token),
+              emailGetter(token),
               raiseInvalidConfError( 
                 "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token."
               )
