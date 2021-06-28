@@ -31,6 +31,7 @@ import org.http4s.headers.Authorization
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.argonaut.jsonDecoder
 import org.http4s.syntax.literals._
+import org.http4s.client.middleware._
 
 import scala.concurrent.duration._
 import scala.Predef.???
@@ -62,7 +63,9 @@ object UserInfoGetter {
       .withTimeout(Duration.Inf)
       .build
       .use(client => 
-          client.expect[Json](req).map(v => (v -| "email").flatMap(_.as[String].toOption))
+          ResponseLogger(true, true, _ => false)(
+            RequestLogger(true, true, _ => false)(client)
+          ).expect[Json](req).map(v => (v -| "email").flatMap(_.as[String].toOption))
       )
   }
 
