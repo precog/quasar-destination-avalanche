@@ -49,11 +49,9 @@ lazy val core = project
       "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "quasar-api" % quasarVersion.value,
       "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
-      "org.specs2" %% "specs2-core" % specs2Version % Test),
-    quasarPluginDependencies ++= Seq(
       "org.http4s" %% "http4s-argonaut" % http4sVersion,
       "org.http4s" %% "http4s-ember-client" % http4sVersion,
-    ),
+      "org.specs2" %% "specs2-core" % specs2Version % Test),
     assemblyExcludedJars in assembly := {
       val cp = (fullClasspath in assembly).value
       cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
