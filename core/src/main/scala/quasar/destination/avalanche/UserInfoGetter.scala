@@ -31,14 +31,10 @@ import org.http4s.headers.Authorization
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.argonaut.jsonDecoder
 import org.http4s.syntax.literals._
-import org.http4s.client.middleware._
 
-import scala.concurrent.duration._
-import scala.Predef.???
 import scala.{Option, Some, None, StringContext, Either, Left, Right}
 
 import quasar.connector.{Credentials, GetAuth, ExternalCredentials}
-import cats.data.EitherT
 import quasar.api.destination.DestinationError
 
 object UserInfoGetter {
@@ -59,10 +55,14 @@ object UserInfoGetter {
     EmberClientBuilder
       .default[F]
       .build
-      .use(client => 
-          ResponseLogger(true, true, _ => false)(
-            RequestLogger(true, true, _ => false)(client)
-          ).expect[Json](req).map(v => (v -| "email").flatMap(_.as[String].toOption))
+      .use(
+        _.expect[Json](req)
+          .map(v => 
+            (v -| "email")
+              .flatMap(
+                _.as[String].toOption
+              )
+          )
       )
   }
 
