@@ -19,13 +19,11 @@ package quasar.destination.avalanche.s3
 import quasar.destination.avalanche._
 
 import scala.Int
-import scala.util.{Either, Right}
-
-import java.lang.String
+import scala.util.Either
 
 import argonaut._, Argonaut._
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 import cats.effect.{
   Concurrent,
   ConcurrentEffect,
@@ -47,7 +45,6 @@ import quasar.blobstore.s3.{
 }
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.lib.jdbc.TransactorConfig
 
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
@@ -59,8 +56,8 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
   val destinationType: DestinationType =
     DestinationType("avalanche-s3", 1L)
 
-  def connectionConfig(config: AvalancheS3Config): ConnectionConfig = 
-    ConnectionConfig(
+  def connectionConfig(config: AvalancheS3Config): AvalancheTransactorConfig = 
+    AvalancheTransactorConfig(
       config.connectionUri,
       config.username,
       config.clusterPassword,

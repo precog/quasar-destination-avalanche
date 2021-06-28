@@ -58,9 +58,6 @@ object UserInfoGetter {
 
     EmberClientBuilder
       .default[F]
-      .withMaxTotal(400)
-      .withMaxPerKey(_ => 200)
-      .withTimeout(Duration.Inf)
       .build
       .use(client => 
           ResponseLogger(true, true, _ => false)(
@@ -79,13 +76,13 @@ object UserInfoGetter {
 
   def getToken[F[_]: Monad: Clock](
     getAuth: GetAuth[F], 
-    key: UUID, 
-    raiseInvalidConfError: String => InitError
-  ): F[Either[InitError, Credentials.Token]] = {
+    key: UUID
+    // raiseInvalidConfError: String => InitError
+  ): F[Either[String, Credentials.Token]] = {
 
-    def verifyCreds(cred: Credentials): Either[InitError, Credentials.Token] = cred match {
+    def verifyCreds(cred: Credentials): Either[String, Credentials.Token] = cred match {
       case t: Credentials.Token => Right(t)
-      case _ => Left(raiseInvalidConfError("Unsupported auth type provided by the configured auth key"))
+      case _ => Left("Unsupported auth type provided by the configured auth key")
     }
 
     getAuth(key).flatMap {
@@ -100,18 +97,18 @@ object UserInfoGetter {
               renew >> 
                 acquire
                   .flatMap(_.nonExpired)
-                  .map(_.toRight(raiseInvalidConfError("Failed to acquire a non-expired token")))
+                  .map(_.toRight("Failed to acquire a non-expired token"))
             case Some(t) => 
-              t.asRight[InitError].pure[F]
+              t.asRight[String].pure[F]
           }
         } yield result.flatMap(verifyCreds)
 
       case None => 
-        raiseInvalidConfError("No auth found for the configured auth key")
+        "No auth found for the configured auth key"
           .asLeft[Credentials.Token].pure[F]
 
       case Some(_) => 
-        raiseInvalidConfError("Unsupported credential type provided by the configured auth key")
+        "Unsupported credential type provided by the configured auth key"
           .asLeft[Credentials.Token].pure[F]
     }
 

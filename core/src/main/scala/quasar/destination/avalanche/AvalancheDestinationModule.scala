@@ -16,17 +16,14 @@
 
 package quasar.destination.avalanche
 
-import java.lang.{Exception, String}
-import java.net.URI
-import java.util.UUID
+import java.lang.Exception
 
 import scala.StringContext
 import scala.util.{Either, Left, Random, Right}
-import scala.{Option, Some, None}
 
 import argonaut._, Argonaut._, ArgonautCats._
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 
@@ -35,25 +32,16 @@ import doobie._
 import org.slf4s.{Logger, LoggerFactory}
 
 import quasar.api.destination.{DestinationError => DE}
-import quasar.connector.{GetAuth, MonadResourceErr, Credentials}
+import quasar.connector.{GetAuth, MonadResourceErr}
 import quasar.connector.destination._
-import quasar.lib.jdbc.{ManagedTransactor, Redacted, TransactorConfig}
+import quasar.lib.jdbc.{ManagedTransactor, Redacted}
 
-import scala.Predef.???
-
-
-case class ConnectionConfig(
-  connectionUri: URI,
-  username: Username, 
-  password: Option[ClusterPassword], 
-  googleAuth: Option[GoogleAuth],
-  salesforceAuth: Option[SalesforceAuth])
 
 abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModule {
 
   type InitError = DE.InitializationError[Json]
 
-  def connectionConfig(config: C): ConnectionConfig
+  def connectionConfig(config: C): AvalancheTransactorConfig
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: C,
@@ -84,16 +72,18 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
     def liftF[X](fa: F[X]): EitherT[Resource[F, ?], InitError, X] =
       EitherT.right(Resource.eval(fa))
 
+    lazy val sanitizedJson = sanitizeDestinationConfig(config)
+
     val init = for {
       cfg <- EitherT.fromEither[Resource[F, ?]](cfg0)
 
       xaCfg <- EitherT(
         Resource.eval(
-          transactorConfig(
-            cfg, 
-            sanitizeDestinationConfig(config), 
+          connectionConfig(cfg).transactorConfig( 
             auth
-          )
+          ).map(_.leftMap(s => 
+             DE.InvalidConfiguration(destinationType, sanitizedJson, scalaz.NonEmptyList(s))
+           ))
         )
       )
 
@@ -106,7 +96,7 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
           .attemptNarrow[Exception]
           .map(_.leftMap(DE.connectionFailed[Json, InitError](
             destinationType,
-            sanitizeDestinationConfig(config), _)))
+            sanitizedJson, _)))
       }
 
       slog <- liftF(Sync[F].delay(LoggerFactory(s"quasar.plugin.$debugId")))
@@ -117,55 +107,6 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
     } yield dest
 
     init.value
-  }
-
-  def transactorConfig[F[_]: ConcurrentEffect: Timer: ContextShift](
-    config: C, 
-    sanitizedJson: Json, 
-    getAuth: GetAuth[F]): F[Either[InitError, TransactorConfig]] = {
-
-    val connDeets = connectionConfig(config)
-
-    def raiseInvalidConfError(s: String): InitError = 
-      DE.InvalidConfiguration(destinationType, sanitizedJson, scalaz.NonEmptyList(s))
-
-    def getConfigForAuthKey(
-      authKey: UUID, 
-      emailGetter: Credentials.Token => F[Option[String]]
-    ): F[Either[InitError, TransactorConfig]] = 
-        (
-          for {
-            token <- EitherT(UserInfoGetter.getToken[F](
-              getAuth, 
-              authKey, 
-              raiseInvalidConfError
-            ))
-            email <- EitherT.fromOptionF(
-              emailGetter(token),
-              raiseInvalidConfError( 
-                "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token."
-              )
-            )
-          } yield AvalancheTransactorConfig(connDeets.connectionUri, Username(email), token)
-        ).value
-
-    (connDeets.password, connDeets.googleAuth, connDeets.salesforceAuth) match {
-      case (Some(password), None, None) => 
-        AvalancheTransactorConfig(connDeets.connectionUri, connDeets.username, password).asRight[InitError].pure[F]
-
-      case (None, Some(GoogleAuth(authKey)), None) => 
-        getConfigForAuthKey(authKey, UserInfoGetter.fromGoogle[F](_))
-
-      case (None, None, Some(SalesforceAuth(authKey))) => 
-        getConfigForAuthKey(authKey, UserInfoGetter.fromSalesforce[F](_))
-
-      case _ => 
-          (DE.InvalidConfiguration(
-            destinationType, 
-            sanitizedJson, 
-            scalaz.NonEmptyList("Must specify exactly one of: 'username'+'clusterPassword', 'googleAuthId' or 'salesforceAuthId'")
-          ): InitError).asLeft[TransactorConfig].pure[F]
-    }
   }
 
 }

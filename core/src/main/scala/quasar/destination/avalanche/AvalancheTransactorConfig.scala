@@ -16,15 +16,60 @@
 
 package quasar.destination.avalanche
 
-import scala.{Int, None, Some, StringContext}
+import cats.effect._
+import cats.implicits._
+import cats.data.EitherT
+
+import scala.{Int, None, Some, StringContext, Option, Either}
 import scala.concurrent.duration._
 
 import java.lang.String
 import java.net.URI
 import java.nio.charset.Charset
+import java.util.UUID
 
 import quasar.lib.jdbc.{JdbcDriverConfig, TransactorConfig}
-import quasar.connector.Credentials
+import quasar.connector.{GetAuth, Credentials}
+
+case class AvalancheTransactorConfig(
+  connectionUri: URI,
+  username: Username, 
+  password: Option[ClusterPassword], 
+  googleAuth: Option[GoogleAuth],
+  salesforceAuth: Option[SalesforceAuth]) {
+
+  def transactorConfig[F[_]: ConcurrentEffect: Timer: ContextShift](
+    getAuth: GetAuth[F]): F[Either[String, TransactorConfig]] = {
+
+    def getConfigForAuthKey(
+      authKey: UUID, 
+      emailGetter: Credentials.Token => F[Option[String]]
+    ): F[Either[String, TransactorConfig]] = 
+        (
+          for {
+            token <- EitherT(UserInfoGetter.getToken[F](getAuth, authKey))
+            email <- EitherT.fromOptionF(
+              emailGetter(token),
+                "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token."
+            )
+          } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email), token)
+        ).value
+
+    (password, googleAuth, salesforceAuth) match {
+      case (Some(password), None, None) => 
+        AvalancheTransactorConfig.fromUsernamePassword(connectionUri, username, password).asRight[String].pure[F]
+
+      case (None, Some(GoogleAuth(authKey)), None) => 
+        getConfigForAuthKey(authKey, UserInfoGetter.fromGoogle[F](_))
+
+      case (None, None, Some(SalesforceAuth(authKey))) => 
+        getConfigForAuthKey(authKey, UserInfoGetter.fromSalesforce[F](_))
+
+      case _ => 
+          "Must specify exactly one of: 'username'+'clusterPassword', 'googleAuthId' or 'salesforceAuthId'".asLeft[TransactorConfig].pure[F]
+    }
+  }
+}
 
 object AvalancheTransactorConfig {
   val IngresDriverFqcn: String = "com.ingres.jdbc.IngresDriver"
@@ -54,7 +99,7 @@ object AvalancheTransactorConfig {
     TransactorConfig(driverConfig, None)
   }
 
-  def apply(
+  def fromUsernamePassword(
       connectionUrl: URI,
       username: Username,
       password: ClusterPassword)
@@ -63,7 +108,7 @@ object AvalancheTransactorConfig {
 
   private val utf8 = Charset.forName("UTF-8")
 
-  def apply(
+  def fromToken(
     connectionUrl: URI,
     username: Username,
     token: Credentials.Token

@@ -18,11 +18,10 @@ package quasar.destination.avalanche.http
 
 import quasar.destination.avalanche._
 
-import scala._, Predef._
+import scala._
 
 import argonaut._, Argonaut._
 
-import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 
@@ -33,15 +32,14 @@ import org.slf4s.Logger
 import quasar.api.destination.DestinationType
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.lib.jdbc.TransactorConfig
 
 object AvalancheHttpDestinationModule extends AvalancheDestinationModule[AvalancheHttpConfig] {
 
   val destinationType: DestinationType =
     DestinationType("avalanche-http", 1L)
 
-  def connectionConfig(config: AvalancheHttpConfig): ConnectionConfig = 
-    ConnectionConfig(
+  def connectionConfig(config: AvalancheHttpConfig): AvalancheTransactorConfig = 
+    AvalancheTransactorConfig(
       config.connectionUri,
       config.username,
       config.clusterPassword,

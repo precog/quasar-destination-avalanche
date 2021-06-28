@@ -18,13 +18,10 @@ package quasar.destination.avalanche.azure
 
 import quasar.destination.avalanche._
 
-import scala.util.{Either, Right}
-
-import java.lang.String
+import scala.util.Either
 
 import argonaut._, Argonaut._
 
-import cats.data.NonEmptyList
 import cats.effect.{
   ConcurrentEffect,
   ContextShift,
@@ -41,15 +38,14 @@ import quasar.api.destination.DestinationType
 import quasar.blobstore.azure.Azure
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.lib.jdbc.TransactorConfig
 
 object AvalancheAzureDestinationModule extends AvalancheDestinationModule[AvalancheAzureConfig] {
 
   val destinationType: DestinationType =
     DestinationType("avalanche-azure", 1L)
 
-  def connectionConfig(config: AvalancheAzureConfig): ConnectionConfig = 
-    ConnectionConfig(
+  def connectionConfig(config: AvalancheAzureConfig): AvalancheTransactorConfig = 
+    AvalancheTransactorConfig(
       config.connectionUri,
       config.username,
       config.password,
