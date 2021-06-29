@@ -50,8 +50,7 @@ object AvalancheAzureDestinationModule extends AvalancheDestinationModule[Avalan
       config.username,
       config.password,
       config.googleAuth,
-      config.salesforceAuth
-    )
+      config.salesforceAuth)
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheAzureConfig].fold(

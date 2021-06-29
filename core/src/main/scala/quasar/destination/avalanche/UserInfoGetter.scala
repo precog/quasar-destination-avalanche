@@ -33,6 +33,7 @@ import org.http4s.argonaut.jsonDecoder
 import org.http4s.syntax.literals._
 
 import scala.{Option, Some, None, StringContext, Either, Left, Right}
+import scala.concurrent.duration.Duration
 
 import quasar.connector.{Credentials, GetAuth, ExternalCredentials}
 
@@ -46,23 +47,19 @@ object UserInfoGetter {
       method = Method.GET,
       headers = Headers.of(
         Authorization(
-          org.http4s.Credentials.Token(AuthScheme.Bearer, new String(token.toByteArray, utf8))
-        )
-      )
-    )
+          org.http4s.Credentials.Token(AuthScheme.Bearer, new String(token.toByteArray, utf8)))))
 
     EmberClientBuilder
       .default[F]
+      .withMaxTotal(400)
+      .withMaxPerKey(_ => 200)
+      .withTimeout(Duration.Inf)
       .build
-      .use(
-        _.expect[Json](req)
-          .map(v => 
-            (v -| "email")
-              .flatMap(
-                _.as[Email].toOption
-              )
-          )
-      )
+      .use(_.expect[Json](req)
+        .map(v => 
+          (v -| "email")
+            .flatMap(
+              _.as[Email].toOption)))
   }
 
   def fromGoogle[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token): F[Option[Email]] = 
@@ -72,9 +69,9 @@ object UserInfoGetter {
     emailFromUserinfo[F](token, uri"https://login.salesforce.com/services/oauth2/userinfo")
 
   def getToken[F[_]: Monad: Clock](
-    getAuth: GetAuth[F], 
-    key: UUID
-  ): F[Either[String, Credentials.Token]] = {
+      getAuth: GetAuth[F], 
+      key: UUID)
+      : F[Either[String, Credentials.Token]] = {
 
     def verifyCreds(cred: Credentials): Either[String, Credentials.Token] = cred match {
       case t: Credentials.Token => Right(t)

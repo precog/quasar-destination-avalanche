@@ -44,8 +44,7 @@ object AvalancheHttpDestinationModule extends AvalancheDestinationModule[Avalanc
       config.username,
       config.clusterPassword,
       config.googleAuth,
-      config.salesforceAuth
-    )
+      config.salesforceAuth)
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheHttpConfig].fold(

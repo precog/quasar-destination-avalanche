@@ -39,21 +39,21 @@ case class AvalancheTransactorConfig(
   salesforceAuth: Option[SalesforceAuth]) {
 
   def transactorConfig[F[_]: ConcurrentEffect: Timer: ContextShift](
-    getAuth: GetAuth[F]): F[Either[String, TransactorConfig]] = {
+      getAuth: GetAuth[F])
+      : F[Either[String, TransactorConfig]] = {
 
     def getConfigForAuthKey(
-      authKey: UUID, 
-      emailGetter: Credentials.Token => F[Option[Email]]
-    ): F[Either[String, TransactorConfig]] = 
-        (
-          for {
-            token <- EitherT(UserInfoGetter.getToken[F](getAuth, authKey))
-            email <- EitherT.fromOptionF(
-              emailGetter(token),
-                "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token."
-            )
-          } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email.asString), token)
-        ).value
+        authKey: UUID, 
+        emailGetter: Credentials.Token => F[Option[Email]])
+        : F[Either[String, TransactorConfig]] = 
+      (
+        for {
+          token <- EitherT(UserInfoGetter.getToken[F](getAuth, authKey))
+          email <- EitherT.fromOptionF(
+            emailGetter(token),
+            "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token.")
+        } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email.asString), token)
+      ).value
 
     (password, googleAuth, salesforceAuth) match {
       case (Some(password), None, None) => 
@@ -66,7 +66,7 @@ case class AvalancheTransactorConfig(
         getConfigForAuthKey(authKey, UserInfoGetter.fromSalesforce[F](_))
 
       case _ => 
-          "Must specify exactly one of: 'username'+'clusterPassword', 'googleAuthId' or 'salesforceAuthId'".asLeft[TransactorConfig].pure[F]
+        "Must specify exactly one of: 'username'+'clusterPassword', 'googleAuthId' or 'salesforceAuthId'".asLeft[TransactorConfig].pure[F]
     }
   }
 }
@@ -104,19 +104,18 @@ object AvalancheTransactorConfig {
       username: Username,
       password: ClusterPassword)
       : TransactorConfig = 
-        fromDetails(connectionUrl, username, password.asString) 
+    fromDetails(connectionUrl, username, password.asString) 
 
   private val utf8 = Charset.forName("UTF-8")
 
   def fromToken(
-    connectionUrl: URI,
-    username: Username,
-    token: Credentials.Token
-  ): TransactorConfig = 
+      connectionUrl: URI,
+      username: Username,
+      token: Credentials.Token)
+      : TransactorConfig = 
     fromDetails(
       connectionUrl, 
       username, 
-      s"access_token=${new String(token.toByteArray, utf8)}"
-    )
+      s"access_token=${new String(token.toByteArray, utf8)}")
 
 }

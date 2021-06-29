@@ -79,13 +79,10 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
 
       xaCfg <- EitherT(
         Resource.eval(
-          connectionConfig(cfg).transactorConfig( 
-            auth
-          ).map(_.leftMap(s => 
-             DE.InvalidConfiguration(destinationType, sanitizedJson, scalaz.NonEmptyList(s))
-           ))
-        )
-      )
+          connectionConfig(cfg)
+            .transactorConfig(auth)
+            .map(_.leftMap(s => 
+             DE.InvalidConfiguration(destinationType, sanitizedJson, scalaz.NonEmptyList(s))))))
 
       tag <- liftF(Sync[F].delay(Random.alphanumeric.take(6).mkString))
 
