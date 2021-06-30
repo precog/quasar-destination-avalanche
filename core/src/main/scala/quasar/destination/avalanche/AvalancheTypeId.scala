@@ -49,6 +49,8 @@ object AvalancheTypeId {
   final case object IPV6 extends AvalancheTypeId(21)
   final case object UUID extends AvalancheTypeId(22)
   final case object OFFSET_DATE extends AvalancheTypeId(23)
+  final case object CHAR extends AvalancheTypeId(24)
+  final case object VARCHAR extends AvalancheTypeId(25)
 
   val ordinalPrism: Prism[Int, AvalancheTypeId] =
     Prism.partial[Int, AvalancheTypeId]({
@@ -76,11 +78,15 @@ object AvalancheTypeId {
       case IPV6.ordinal => IPV6
       case UUID.ordinal => UUID
       case OFFSET_DATE.ordinal => OFFSET_DATE
+      case CHAR.ordinal => CHAR
+      case VARCHAR.ordinal => VARCHAR
     })(_.ordinal)
 
   val label = Label[AvalancheTypeId] {
-    case NCHAR => "NCHAR/CHAR"
-    case NVARCHAR => "NVARCHAR/VARCHAR"
+    case NCHAR => "NCHAR"
+    case NVARCHAR => "NVARCHAR"
+    case CHAR => "CHAR"
+    case VARCHAR => "VARCHAR"
     case INTEGER1 => "INTEGER1"
     case INTEGER2 => "INTEGER2"
     case INTEGER4 => "INTEGER4"

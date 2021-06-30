@@ -42,12 +42,17 @@ object AvalancheType {
     }
   }
 
-  // Avalanche NCHAR and NVARCHAR are the same as CHAR and VARCHAR
   final case class NCHAR(size: Int) extends AvalancheType {
     def fragment = Fragment.const0(s"NCHAR(${size})")
   }
   final case class NVARCHAR(size: Int) extends AvalancheType {
     def fragment = Fragment.const0(s"NVARCHAR(${size})")
+  }
+  final case class CHAR(size: Int) extends AvalancheType {
+    def fragment = Fragment.const0(s"CHAR(${size})")
+  }
+  final case class VARCHAR(size: Int) extends AvalancheType {
+    def fragment = Fragment.const0(s"VARCHAR(${size})")
   }
   final case object INTEGER1 extends AvalancheType {
     def fragment = fr0"INTEGER1"
