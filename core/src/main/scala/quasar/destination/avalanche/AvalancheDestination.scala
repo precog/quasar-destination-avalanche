@@ -82,6 +82,8 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
       TypeCoercion.Satisfied(NonEmptyList.of(
         Id.NVARCHAR,
         Id.NCHAR,
+        Id.CHAR,
+        Id.VARCHAR,
         Id.INTERVAL_DAY,
         Id.INTERVAL_YEAR,
         Id.IPV4,
@@ -91,9 +93,13 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
 
   def construct(id: TypeId): Either[Type, Constructor[Type]] = id match {
     case Id.NCHAR =>
-      withCharLength(Type.NCHAR(_))
+      withCharLength(Type.NCHAR(_), 16000)
     case Id.NVARCHAR =>
-      withCharLength(Type.NVARCHAR(_))
+      withCharLength(Type.NVARCHAR(_), 16000)
+    case Id.CHAR => 
+      withCharLength(Type.CHAR(_), 32000)
+    case Id.VARCHAR => 
+      withCharLength(Type.VARCHAR(_), 32000)
     case Id.INTEGER1 =>
       Left(Type.INTEGER1)
     case Id.INTEGER2 =>
@@ -145,9 +151,9 @@ abstract class AvalancheDestination[F[_]: MonadResourceErr: Sync: Timer](
 
   private def stepOne: IntegerStep = IntegerStep.Factor(0, 1)
 
-  private def withCharLength(mkType: Int => Type): Either[Type, Constructor[Type]] =
+  private def withCharLength(mkType: Int => Type, maxSize: Int): Either[Type, Constructor[Type]] =
     Right(Constructor.Unary(
-      Labeled("size", Formal.integer(Some(Ior.both(1, 16000)), Some(stepOne), Some(1024))),
+      Labeled("size", Formal.integer(Some(Ior.both(1, maxSize)), Some(stepOne), Some(1024))),
       mkType))
 
   private def withSeconds(mkType: Int => Type): Either[Type, Constructor[Type]] =
