@@ -22,9 +22,13 @@ import java.net.URI
 
 import argonaut._, Argonaut._
 
+import org.http4s.syntax.literals._
+
 import org.specs2.mutable.Specification
 
 import quasar.blobstore.azure.{ AccountName, AzureCredentials, ClientId, ClientSecret, ContainerName, TenantId }
+
+import scala.StringContext
 
 object AvalancheAzureConfigSpec extends Specification {
   import WriteMode._
@@ -46,8 +50,7 @@ object AvalancheAzureConfigSpec extends Specification {
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("my user"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("my user"), ClusterPassword("super secret")),
         Replace,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -57,6 +60,7 @@ object AvalancheAzureConfigSpec extends Specification {
     initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
 
     cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
   }
 
   "avalanche-azure parses and prints a valid legacy config without username" >> {
@@ -76,8 +80,7 @@ object AvalancheAzureConfigSpec extends Specification {
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("dbuser"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("dbuser"), ClusterPassword("super secret")),
         Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -107,8 +110,38 @@ object AvalancheAzureConfigSpec extends Specification {
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("my user"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("my user"), ClusterPassword("super secret")),
+        Truncate,
+        AzureCredentials.ActiveDirectory(
+          ClientId("client-id-uuid"),
+          TenantId("tenant-id-uuid"),
+          ClientSecret("client-secret-string")))
+
+    initialJson.as[AvalancheAzureConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
+  } 
+
+  "avalanche-azure parses and prints a valid config with external auth" >> {
+    val initialJson = Json.obj(
+      "accountName" := "foo",
+      "containerName" := "bar",
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "externalAuth" := Json.obj(
+        "authId" := "00000000-0000-0000-0000-000000000000",
+        "userinfoUri" := "https://potato.tomato.hek/userinfo"),
+      "writeMode" := "truncate",
+      "credentials" := Json.obj(
+        "clientId" := "client-id-uuid",
+        "tenantId" := "tenant-id-uuid",
+        "clientSecret" := "client-secret-string"))
+
+    val cfg =
+      AvalancheAzureConfig(
+        AccountName("foo"),
+        ContainerName("bar"),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.hek/userinfo"),
         Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
@@ -119,4 +152,5 @@ object AvalancheAzureConfigSpec extends Specification {
 
     cfg.asJson.as[AvalancheAzureConfig].result must beRight(cfg)
   }
+
 }

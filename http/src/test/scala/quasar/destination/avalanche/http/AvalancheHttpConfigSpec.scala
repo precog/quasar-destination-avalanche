@@ -18,11 +18,13 @@ package quasar.destination.avalanche.http
 
 import quasar.destination.avalanche._
 
-import scala.{None, Some}
+import scala.{None, Some, StringContext}
 
 import java.net.URI
 
 import argonaut._, Argonaut._
+
+import org.http4s.syntax.literals._
 
 import org.specs2.mutable.Specification
 
@@ -40,8 +42,7 @@ object AvalancheHttpConfigSpec extends Specification {
     val cfg =
       AvalancheHttpConfig(
         URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("myuser"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("myuser"), ClusterPassword("super secret")),
         Truncate,
         Some(URI.create("http://example.com/precog")))
 
@@ -60,8 +61,7 @@ object AvalancheHttpConfigSpec extends Specification {
     val cfg =
       AvalancheHttpConfig(
         URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("myuser"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("myuser"), ClusterPassword("super secret")),
         Create,
         None)
 
@@ -69,4 +69,25 @@ object AvalancheHttpConfigSpec extends Specification {
 
     cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
   }
+
+  "avalanche-http valid external auth is parsed" >> {
+    val json = Json(
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "externalAuth" := Json.obj(
+        "authId" := "00000000-0000-0000-0000-000000000000",
+        "userinfoUri" := "https://potato.tomato.com/userinfo"),
+      "writeMode" := "create")
+
+    val cfg =
+      AvalancheHttpConfig(
+        URI.create("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.com/userinfo"),
+        Create,
+        None)
+
+    json.as[AvalancheHttpConfig].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheHttpConfig].result must beRight(cfg)
+  }
+
 }

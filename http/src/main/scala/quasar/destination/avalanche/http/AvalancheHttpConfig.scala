@@ -25,21 +25,36 @@ import java.net.URI
 
 import argonaut._, Argonaut._
 
-import quasar.lib.jdbc.Redacted
-
 final case class AvalancheHttpConfig(
     connectionUri: URI,
-    username: Username,
-    clusterPassword: ClusterPassword,
+    auth: AvalancheAuth,
     writeMode: WriteMode,
     baseUrl: Option[URI]) {
 
   def sanitized: AvalancheHttpConfig =
-    copy(clusterPassword = ClusterPassword(Redacted))
+    copy(
+      auth = auth.sanitized)
 }
 
 object AvalancheHttpConfig {
-  implicit val avalancheHttpConfigCodecJson: CodecJson[AvalancheHttpConfig] =
-    casecodec5(AvalancheHttpConfig.apply, AvalancheHttpConfig.unapply)(
-      "connectionUri", "username", "clusterPassword", "writeMode", "baseUrl")
+
+  implicit def avalancheHttpConfigCodecJson: CodecJson[AvalancheHttpConfig] =
+    CodecJson({ (c: AvalancheHttpConfig) =>
+        (("baseUrl" :=? c.baseUrl) ->?:
+          ("connectionUri" := c.connectionUri) ->:
+          ("writeMode" := c.writeMode) ->:
+          jEmptyObject)
+          .deepmerge(c.auth.asJson)
+      },
+      (c => for {
+         connectionUri <- (c --\ "connectionUri").as[URI]
+         auth <- c.as[AvalancheAuth]
+         writeMode <- (c --\ "writeMode").as[WriteMode]
+         baseUrl <- (c --\ "baseUrl").as[Option[URI]]
+       } yield AvalancheHttpConfig(
+         connectionUri,
+         auth,
+         writeMode,
+         baseUrl)))
+
 }
