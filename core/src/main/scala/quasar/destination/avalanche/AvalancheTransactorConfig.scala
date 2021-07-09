@@ -105,21 +105,22 @@ object AvalancheTransactorConfig {
   val MaxLifetime: FiniteDuration = 3.minutes
   val PoolSize: Int = 8
 
+  private[this] def appendJdbcParamString(jdbcUri: URI, params: String): URI = {
+      val u = jdbcUri.toString
+
+      if (u.endsWith(";"))
+        URI.create(u + params)
+      else
+        URI.create(u + ";" + params)
+  }
+
   private[this] def fromDetails(
       connectionUrl: URI,
       username: Username,
       password: String)
       : TransactorConfig = {
 
-    val fullUrl = {
-      val u = connectionUrl.toString
-      val auth = s"UID=${username.asString};PWD=$password"
-
-      if (u.endsWith(";"))
-        URI.create(u + auth)
-      else
-        URI.create(u + ";" + auth)
-    }
+    val fullUrl = appendJdbcParamString(connectionUrl, s"UID=${username.asString};PWD=$password")
 
     val driverConfig =
       JdbcDriverConfig.JdbcDriverManagerConfig(fullUrl, Some(IngresDriverFqcn))
@@ -140,10 +141,21 @@ object AvalancheTransactorConfig {
       connectionUrl: URI,
       username: Username,
       token: Credentials.Token)
-      : TransactorConfig = 
+      : TransactorConfig = {
+
+    // for token auth the auth_type must be set to "browser"
+    // If any 'auth_type' is already set we don't override,
+    // but we do append `auth_type=browser' if it is missing
+    val fullUri = 
+      if (connectionUrl.toString.matches(raw".*(/|;)auth_type=[^;]+.*"))
+        connectionUrl 
+      else 
+        appendJdbcParamString(connectionUrl, "auth_type=browser")
+
     fromDetails(
-      connectionUrl, 
+      fullUri, 
       username, 
       s"access_token=${new String(token.toByteArray, utf8)}")
+  }
 
 }
