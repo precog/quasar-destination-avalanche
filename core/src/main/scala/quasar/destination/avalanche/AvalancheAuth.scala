@@ -18,6 +18,7 @@ package quasar.destination.avalanche
 
 import quasar.lib.jdbc.Redacted
 
+import java.lang.String
 import java.util.UUID
 
 import scala.{Serializable, Product}
@@ -41,12 +42,12 @@ object AvalancheAuth {
   }
 
 
-  final case class ExternalAuth(authId: UUID, userinfoUri: Uri) extends AvalancheAuth {
-    def sanitized: AvalancheAuth = ExternalAuth(UUID0, userinfoUri)
+  final case class ExternalAuth(authId: UUID, userinfoUri: Uri, userinfoUidField: String) extends AvalancheAuth {
+    def sanitized: AvalancheAuth = this.copy(authId = UUID0)
   } 
   object ExternalAuth {
     implicit val codecExternalAuth: CodecJson[ExternalAuth] = 
-      casecodec2(ExternalAuth.apply, ExternalAuth.unapply)("authId", "userinfoUri")
+      casecodec3(ExternalAuth.apply, ExternalAuth.unapply)("authId", "userinfoUri", "userinfoUidField")
   }
 
   implicit val encodeAuth: EncodeJson[AvalancheAuth] = EncodeJson {

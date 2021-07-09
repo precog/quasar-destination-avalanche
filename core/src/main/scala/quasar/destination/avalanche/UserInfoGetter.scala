@@ -38,7 +38,7 @@ object UserInfoGetter {
 
   private val utf8 = StandardCharsets.UTF_8
 
-  def emailFromUserinfo[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token, userinfoUrl: Uri): F[Option[Email]] = {
+  def emailFromUserinfo[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token, userinfoUrl: Uri, userinfoField: String): F[Option[Email]] = {
     val req = Request[F](
       uri = userinfoUrl,
       method = Method.GET,
@@ -54,7 +54,7 @@ object UserInfoGetter {
       .build
       .use(_.expect[Json](req)
         .map(v => 
-          (v -| "email")
+          (v -| userinfoField)
             .flatMap(
               _.as[Email].toOption)))
   }

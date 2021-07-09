@@ -131,7 +131,8 @@ object AvalancheS3ConfigSpec extends Specification {
       "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
       "externalAuth" := Json.obj(
         "authId" := "00000000-0000-0000-0000-000000000000",
-        "userinfoUri" := "https://potato.tomato.com/userinfo"),
+        "userinfoUri" := "https://potato.tomato.com/userinfo",
+        "userinfoUidField" := "email"),
       "writeMode" := "truncate")
 
     val cfg =
@@ -142,7 +143,7 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.com/userinfo"),
+        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.com/userinfo", "email"),
         Truncate)
 
     initialJson.as[AvalancheS3Config].result must beRight(cfg)

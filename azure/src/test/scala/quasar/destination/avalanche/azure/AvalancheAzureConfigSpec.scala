@@ -129,7 +129,8 @@ object AvalancheAzureConfigSpec extends Specification {
       "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
       "externalAuth" := Json.obj(
         "authId" := "00000000-0000-0000-0000-000000000000",
-        "userinfoUri" := "https://potato.tomato.hek/userinfo"),
+        "userinfoUri" := "https://potato.tomato.hek/userinfo",
+        "userinfoUidField" := "email"),
       "writeMode" := "truncate",
       "credentials" := Json.obj(
         "clientId" := "client-id-uuid",
@@ -141,7 +142,7 @@ object AvalancheAzureConfigSpec extends Specification {
         AccountName("foo"),
         ContainerName("bar"),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.hek/userinfo"),
+        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.hek/userinfo", "email"),
         Truncate,
         AzureCredentials.ActiveDirectory(
           ClientId("client-id-uuid"),
