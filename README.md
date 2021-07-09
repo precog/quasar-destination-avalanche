@@ -29,18 +29,19 @@ The Avalanche destination uses Azure Blob Storage to stage files before loading.
   "connectionUri": String,
   "username":String,
   "clusterPassword": String,
+  "externalAuth": Object,
   "writeMode": "create" | "replace" | "truncate",
   "credentials": Object
 }
 ```
 
-
 - `accountName` is the Azure storage account name to use.
 - `containerName` is the name of the container that will be used to
   stage files before loading into Avalanche
 - `connectionUri` is the JDBC URI provided by Actian
-- `username` is the username
-- `clusterPassword` is the password associated with the username
+- `username` username when using username/password authentication. Must be omitted if using `externalAuth`
+- `clusterPassword` is the password associated with the username. Must be omitted if using `externalAuth`
+- `externalAuth` is the external authentication configuration when using SSO. Example given below. Must be omitted if using `username` and `clusterPassword`
 - `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
 - `credentials` specifies the Azure Active Directory configuration
 
@@ -56,6 +57,20 @@ The Avalanche destination uses Azure Blob Storage to stage files before loading.
 - `tenantId` also called "Directory Id"
 - `clientSecret` provided by Azure Active 
 
+External authentication:
+
+```
+"externalAuth": {
+  "authId": String,
+  "userinfoUri": String, 
+  "userinfoUidField": String
+}
+```
+
+- `authId`: identifier obtained from the quasar implementation representing the externally obtained bearer token
+- `userinfoUri`: the uri which can be queried using the access token obtain with the `authId` identifier to obtain the UID to be used in the JDBC string
+- `userinfoUidField`: the field name that corresponds to a field on the `userinfoUri` response. The value of the field under this name will be inserted into the JDBC string as the UID.
+
 ## Avalanche with AWS S3 Blob Storage Configuration
 
 Configuration format for Avalanche with S3 staging is:
@@ -66,11 +81,32 @@ Configuration format for Avalanche with S3 staging is:
   "connectionUri": String,
   "username":String,
   "clusterPassword": String,
+  "externalAuth": Object,
   "writeMode": "create" | "replace" | "truncate",
 }
 ```
 
-Where `bucketConfig` has this format:
+- `connectionUri` is the JDBC URI provided by Actian
+- `username` username when using username/password authentication. Must be omitted if using `externalAuth`
+- `clusterPassword` is the password associated with the username. Must be omitted if using `externalAuth`
+- `externalAuth` is the external authentication configuration when using SSO. Example given below. Must be omitted if using `username` and `clusterPassword`
+- `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
+
+External authentication:
+
+```
+"externalAuth": {
+  "authId": String,
+  "userinfoUri": String, 
+  "userinfoUidField": String
+}
+```
+
+- `authId`: identifier obtained from the quasar implementation representing the externally obtained bearer token
+- `userinfoUri`: the uri which can be queried using the access token obtain with the `authId` identifier to obtain the UID to be used in the JDBC string
+- `userinfoUidField`: the field name that corresponds to a field on the `userinfoUri` response. The value of the field under this name will be inserted into the JDBC string as the UID.
+
+`bucketConfig` has this format:
 
 ```
 {
@@ -151,11 +187,26 @@ When the Avalanche cluster has direct access via HTTP to Precog, staging can be 
 }
 ```
 
-* `connectionUri`: The JDBC URL provided by Actian for connecting to the Avalanche cluster
-* `username`: the username to use when connecting to Avalanche
-* `clusterPassword`: the password to use when connecting to Avalanche
-* `writeMode`: determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
-* `baseUrl` (optional): The base URL that should be used to access the Precog HTTP api, if omitted the IP and port of the Precog server itself is used.
+- `connectionUri` is the JDBC URI provided by Actian
+- `username` username when using username/password authentication. Must be omitted if using `externalAuth`
+- `clusterPassword` is the password associated with the username. Must be omitted if using `externalAuth`
+- `externalAuth` is the external authentication configuration when using SSO. Example given below. Must be omitted if using `username` and `clusterPassword`
+- `writeMode` determines the behaviour exhibited before table creation and loading, replace drops the table, truncate empties out the table's contents and create does nothing prior to table creation
+- `baseUrl` (optional): The base URL that should be used to access the Precog HTTP api, if omitted the IP and port of the Precog server itself is used.
+
+External authentication:
+
+```
+"externalAuth": {
+  "authId": String,
+  "userinfoUri": String, 
+  "userinfoUidField": String
+}
+```
+
+- `authId`: identifier obtained from the quasar implementation representing the externally obtained bearer token
+- `userinfoUri`: the uri which can be queried using the access token obtain with the `authId` identifier to obtain the UID to be used in the JDBC string
+- `userinfoUidField`: the field name that corresponds to a field on the `userinfoUri` response. The value of the field under this name will be inserted into the JDBC string as the UID.
 
 Example:
 
