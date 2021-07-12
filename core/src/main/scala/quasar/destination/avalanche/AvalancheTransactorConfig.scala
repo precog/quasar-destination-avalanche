@@ -147,7 +147,7 @@ object AvalancheTransactorConfig {
     // If any 'auth_type' is already set we don't override,
     // but we do append `auth_type=browser' if it is missing
     val fullUri = 
-      if (connectionUrl.toString.matches(raw".*(/|;)auth_type=[^;]+.*"))
+      if (connectionUrl.toString.matches(raw"^.*(/|;)auth_type=[^;]+.*$$"))
         connectionUrl 
       else 
         appendJdbcParamString(connectionUrl, "auth_type=browser")
