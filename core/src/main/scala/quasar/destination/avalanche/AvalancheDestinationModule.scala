@@ -34,7 +34,7 @@ import org.slf4s.{Logger, LoggerFactory}
 import quasar.api.destination.{DestinationError => DE}
 import quasar.connector.{GetAuth, MonadResourceErr}
 import quasar.connector.destination._
-import quasar.lib.jdbc.{ManagedTransactor, Redacted}
+import quasar.lib.jdbc.Redacted
 
 
 abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModule {
