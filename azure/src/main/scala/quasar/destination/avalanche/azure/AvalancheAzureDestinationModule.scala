@@ -56,7 +56,7 @@ object AvalancheAzureDestinationModule extends AvalancheDestinationModule[Avalan
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: AvalancheAzureConfig,
-      transactor: Transactor[F],
+      transactor: F[Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] = {

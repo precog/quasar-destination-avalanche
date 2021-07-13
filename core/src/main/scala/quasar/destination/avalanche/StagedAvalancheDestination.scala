@@ -49,7 +49,7 @@ final class StagedAvalancheDestination[F[_]: Sync: MonadResourceErr: Timer](
     stagedUri: FileName => URI,
     vwloadAuthParams: Map[String, String],
     writeMode: WriteMode,
-    xa: Transactor[F],
+    acquireXa: F[Transactor[F]],
     logger: Logger)
     extends AvalancheDestination[F](logger) {
 
@@ -59,9 +59,10 @@ final class StagedAvalancheDestination[F[_]: Sync: MonadResourceErr: Timer](
       gzippedCsv: Stream[F, Byte])
       : Stream[F, Unit] =
     Stream.resource(stageBytes(gzippedCsv) evalMap { uri =>
-      loadUris(tableName, columns, writeMode, NonEmptyList.one(uri), vwloadAuthParams, logHandler)
-        .void
-        .transact(xa)
+      acquireXa.flatMap(xa =>
+        loadUris(tableName, columns, writeMode, NonEmptyList.one(uri), vwloadAuthParams, logHandler)
+          .void
+          .transact(xa))
     })
 
   ////

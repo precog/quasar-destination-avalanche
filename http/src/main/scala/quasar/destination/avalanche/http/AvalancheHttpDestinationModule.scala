@@ -50,7 +50,7 @@ object AvalancheHttpDestinationModule extends AvalancheDestinationModule[Avalanc
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: AvalancheHttpConfig,
-      transactor: Transactor[F],
+      transactor: F[Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] =

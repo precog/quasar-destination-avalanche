@@ -47,7 +47,7 @@ object AvalancheAzureDestination {
   def apply[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: AvalancheAzureConfig,
       clientMgr: F[(Ref[F,Expires[BlobContainerAsyncClient]], F[Unit])],
-      xa: Transactor[F],
+      acquireXa: F[Transactor[F]],
       logger: Logger)
       : Destination[F] = {
 
@@ -90,7 +90,7 @@ object AvalancheAzureDestination {
       stagedUri,
       authParams,
       config.writeMode,
-      xa,
+      acquireXa,
       logger)
   }
 

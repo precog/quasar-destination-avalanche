@@ -16,86 +16,50 @@
 
 package quasar.destination.avalanche
 
-import cats.effect._
-import cats.{Monad}
-import cats.implicits._
-import cats.data.EitherT
-
-import scala.{Int, None, Some, StringContext, Either, Right, Left}
-import scala.concurrent.duration._
+import quasar.lib.jdbc.{JdbcDriverConfig, TransactorConfig, ManagedTransactor}
+import quasar.connector.{Credentials, GetAuth}
 
 import java.lang.String
 import java.net.URI
-import java.util.UUID
 import java.nio.charset.Charset
 
-import quasar.lib.jdbc.{JdbcDriverConfig, TransactorConfig}
-import quasar.connector.{GetAuth, Credentials, ExternalCredentials}
-import quasar.destination.avalanche.AvalancheAuth.UsernamePassword
-import quasar.destination.avalanche.AvalancheAuth.ExternalAuth
+import scala.{Int, None, Some, StringContext, Either}
+import scala.concurrent.duration._
+
+import cats.syntax.all._
+
+import cats.effect.{Resource, Concurrent, ContextShift, Timer}
+
+import doobie.Transactor
 
 case class AvalancheTransactorConfig(
   connectionUri: URI,
   auth: AvalancheAuth) {
 
-  private def getToken[F[_]: Monad: Clock](
-      getAuth: GetAuth[F], 
-      key: UUID)
-      : F[Either[String, Credentials.Token]] = {
+  def transactorAcquirer[F[_]: Concurrent: ContextShift: Timer](debugId: String, getAuth: GetAuth[F]): Resource[F, Either[String, F[Transactor[F]]]] = auth match {
+    case AvalancheAuth.UsernamePassword(username, password) =>
 
-    def verifyCreds(cred: Credentials): Either[String, Credentials.Token] = cred match {
-      case t: Credentials.Token => Right(t)
-      case _ => Left("Unsupported auth type provided by the configured auth key")
-    }
+      ManagedTransactor[F](
+        debugId, 
+        AvalancheTransactorConfig.fromUsernamePassword(
+          connectionUri, 
+          username, 
+          password))
+        .map(_.pure[F].asRight[String])
 
-    getAuth(key).flatMap {
-      case Some(ExternalCredentials.Perpetual(t)) => 
-        verifyCreds(t).pure[F]
+    case ext: AvalancheAuth.ExternalAuth =>
+      TransactorManager(
+        ext,
+        getAuth,
+        (email, token) => {
+          val conf = AvalancheTransactorConfig.fromToken(
+            connectionUri, 
+            Username(email.asString), 
+            token)
+          ManagedTransactor[F](debugId, conf)
+        })
+        .attemptNarrow[TransactorManager.Error].map(_.leftMap(_.message))
 
-      case Some(ExternalCredentials.Temporary(acquire, renew)) => 
-        for {
-          creds <- acquire.flatMap(_.nonExpired)
-          result <- creds match {
-            case None => 
-              renew >> 
-                acquire
-                  .flatMap(_.nonExpired)
-                  .map(_.toRight("Failed to acquire a non-expired token"))
-            case Some(t) => 
-              t.asRight[String].pure[F]
-          }
-        } yield result.flatMap(verifyCreds)
-
-      case None => 
-        "No auth found for the configured auth key"
-          .asLeft[Credentials.Token].pure[F]
-
-      case Some(_) => 
-        "Unsupported credential type provided by the configured auth key"
-          .asLeft[Credentials.Token].pure[F]
-    }
-
-  }
-
-  def transactorConfig[F[_]: ConcurrentEffect: Timer: ContextShift](
-      getAuth: GetAuth[F])
-      : F[Either[String, TransactorConfig]] = {
-
-    auth match {
-      case UsernamePassword(username, password) =>
-        AvalancheTransactorConfig.fromUsernamePassword(connectionUri, username, password).asRight[String].pure[F]
-
-      case ExternalAuth(authId, userinfoUri, userinfoField) =>
-        (
-          for {
-            token <- EitherT(getToken[F](getAuth, authId))
-            email <- EitherT.fromOptionF(
-              UserInfoGetter.emailFromUserinfo(token, userinfoUri, userinfoField),
-              "Querying user info using the token acquired via the auth key did not yield an email. Check the scopes granted to the token.")
-          } yield AvalancheTransactorConfig.fromToken(connectionUri, Username(email.asString), token)
-        ).value
-
-    }
   }
 }
 

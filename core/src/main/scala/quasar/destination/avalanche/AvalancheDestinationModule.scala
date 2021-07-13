@@ -45,7 +45,7 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: C,
-      transactor: Transactor[F],
+      transactor: F[Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]]
@@ -74,31 +74,29 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
 
     lazy val sanitizedJson = sanitizeDestinationConfig(config)
 
+
     val init = for {
       cfg <- EitherT.fromEither[Resource[F, ?]](cfg0)
 
-      xaCfg <- EitherT(
-        Resource.eval(
-          connectionConfig(cfg)
-            .transactorConfig(auth)
-            .map(_.leftMap(s => 
-             DE.InvalidConfiguration(destinationType, sanitizedJson, scalaz.NonEmptyList(s))))))
-
       tag <- liftF(Sync[F].delay(Random.alphanumeric.take(6).mkString))
-
       debugId = s"destination.$id.$tag"
 
-      xa <- EitherT {
-        ManagedTransactor[F](debugId, xaCfg)
-          .attemptNarrow[Exception]
-          .map(_.leftMap(DE.connectionFailed[Json, InitError](
-            destinationType,
-            sanitizedJson, _)))
-      }
+      // The below is a little dense, but long story short:
+      // - if an exception occurred - then raise a connectionFailed
+      // - if an error string was returned - then raise an invalidConfiguration
+      acquireTransactor <- EitherT(connectionConfig(cfg)
+        .transactorAcquirer[F](debugId, auth)
+        .attemptNarrow[Exception]
+        .map(_.leftMap(DE.connectionFailed[Json, InitError](destinationType, sanitizedJson, _))
+          .flatMap(_.leftMap(errorString =>
+            DE.invalidConfiguration[Json, InitError](
+              destinationType, 
+              sanitizedJson, 
+              scalaz.NonEmptyList(errorString))))))
 
       slog <- liftF(Sync[F].delay(LoggerFactory(s"quasar.plugin.$debugId")))
 
-      dest <- EitherT(avalancheDestination(cfg, xa, pushPull, slog))
+      dest <- EitherT(avalancheDestination(cfg, acquireTransactor, pushPull, slog))
 
       _ <- liftF(Sync[F].delay(slog.info(s"Initialized $debugId: ${sanitizeDestinationConfig(config)}")))
     } yield dest

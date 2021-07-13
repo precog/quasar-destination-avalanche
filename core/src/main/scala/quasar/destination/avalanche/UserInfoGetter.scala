@@ -26,11 +26,10 @@ import java.nio.charset.StandardCharsets
 
 import org.http4s.{Request, Uri, Method, Headers, AuthScheme}
 import org.http4s.headers.Authorization
-import org.http4s.ember.client.EmberClientBuilder
+import org.http4s.client.Client
 import org.http4s.argonaut.jsonDecoder
 
 import scala.Option
-import scala.concurrent.duration.Duration
 
 import quasar.connector.{Credentials}
 
@@ -38,7 +37,13 @@ object UserInfoGetter {
 
   private val utf8 = StandardCharsets.UTF_8
 
-  def emailFromUserinfo[F[_]: ConcurrentEffect: Timer: ContextShift](token: Credentials.Token, userinfoUrl: Uri, userinfoField: String): F[Option[Email]] = {
+  def emailFromUserinfo[F[_]: Sync](
+      client: Client[F],
+      token: Credentials.Token, 
+      userinfoUrl: Uri, 
+      userinfoField: String)
+      : F[Option[Email]] = {
+
     val req = Request[F](
       uri = userinfoUrl,
       method = Method.GET,
@@ -46,17 +51,11 @@ object UserInfoGetter {
         Authorization(
           org.http4s.Credentials.Token(AuthScheme.Bearer, new String(token.toByteArray, utf8)))))
 
-    EmberClientBuilder
-      .default[F]
-      .withMaxTotal(400)
-      .withMaxPerKey(_ => 200)
-      .withTimeout(Duration.Inf)
-      .build
-      .use(_.expect[Json](req)
-        .map(v => 
-          (v -| userinfoField)
-            .flatMap(
-              _.as[Email].toOption)))
+    client.expect[Json](req)
+      .map(v => 
+        (v -| userinfoField)
+          .flatMap(
+            _.as[Email].toOption))
   }
 
 }
