@@ -100,7 +100,7 @@ object TransactorManager {
       lastTransactorRef <- Resource.eval(Ref[F].of(firstTransactor))
       lastTokenRef <- Resource.eval(Ref[F].of(expiringToken))
     } yield 
-      expiringToken.isExpired[F].flatMap(isExpired => 
+      lastTokenRef.get.flatMap(_.isExpired[F]).flatMap(isExpired => 
         if (isExpired)
           for {
             newToken <- acquireValidToken(token)
