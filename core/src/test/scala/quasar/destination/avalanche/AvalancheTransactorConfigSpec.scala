@@ -30,7 +30,7 @@ object AvalancheTransactorConfigSpec extends Specification {
 
   "AvalancheTransactorConfig fromToken" >> {
 
-    "should add format the PWD as PWD=access_token=<token>" >> {
+    "should format the PWD as PWD=access_token=<token>" >> {
       val conf = AvalancheTransactorConfig.fromToken(
         URI.create("jdbc:actian://potato.tomato.com:27839/db;encryption=on;auth_type=browser;"),
         Username("user"),
