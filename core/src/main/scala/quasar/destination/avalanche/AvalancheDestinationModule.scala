@@ -16,14 +16,14 @@
 
 package quasar.destination.avalanche
 
-import java.lang.{Exception, String}
+import java.lang.Exception
 
 import scala.StringContext
 import scala.util.{Either, Left, Random, Right}
 
 import argonaut._, Argonaut._, ArgonautCats._
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 
@@ -32,19 +32,20 @@ import doobie._
 import org.slf4s.{Logger, LoggerFactory}
 
 import quasar.api.destination.{DestinationError => DE}
-import quasar.connector.MonadResourceErr
+import quasar.connector.{GetAuth, MonadResourceErr}
 import quasar.connector.destination._
-import quasar.lib.jdbc.{ManagedTransactor, Redacted, TransactorConfig}
+import quasar.lib.jdbc.Redacted
+
 
 abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModule {
 
   type InitError = DE.InitializationError[Json]
 
-  def transactorConfig(config: C): Either[NonEmptyList[String], TransactorConfig]
+  def connectionConfig(config: C): AvalancheTransactorConfig
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: C,
-      transactor: Transactor[F],
+      transactor: F[Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]]
@@ -53,7 +54,8 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
 
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: Json,
-      pushPull: PushmiPullyu[F])
+      pushPull: PushmiPullyu[F],
+      auth: GetAuth[F])
       : Resource[F, Either[InitError, Destination[F]]] = {
 
     val id = s"${destinationType.name.value}-v${destinationType.version}"
@@ -70,36 +72,36 @@ abstract class AvalancheDestinationModule[C: DecodeJson] extends DestinationModu
     def liftF[X](fa: F[X]): EitherT[Resource[F, ?], InitError, X] =
       EitherT.right(Resource.eval(fa))
 
+    lazy val sanitizedJson = sanitizeDestinationConfig(config)
+
+
     val init = for {
       cfg <- EitherT.fromEither[Resource[F, ?]](cfg0)
 
-      xaCfg <- EitherT.fromEither[Resource[F, ?]] {
-        transactorConfig(cfg)
-          .leftMap(errs => scalaz.NonEmptyList(errs.head, errs.tail: _*))
-          .leftMap(DE.invalidConfiguration[Json, InitError](
-            destinationType,
-            sanitizeDestinationConfig(config), _))
-      }
-
       tag <- liftF(Sync[F].delay(Random.alphanumeric.take(6).mkString))
-
       debugId = s"destination.$id.$tag"
 
-      xa <- EitherT {
-        ManagedTransactor[F](debugId, xaCfg)
-          .attemptNarrow[Exception]
-          .map(_.leftMap(DE.connectionFailed[Json, InitError](
-            destinationType,
-            sanitizeDestinationConfig(config), _)))
-      }
+      // The below is a little dense, but long story short:
+      // - if an exception occurred - then raise a connectionFailed
+      // - if an error string was returned - then raise an invalidConfiguration
+      acquireTransactor <- EitherT(connectionConfig(cfg)
+        .transactorAcquirer[F](debugId, auth)
+        .attemptNarrow[Exception]
+        .map(_.leftMap(DE.connectionFailed[Json, InitError](destinationType, sanitizedJson, _))
+          .flatMap(_.leftMap(errorString =>
+            DE.invalidConfiguration[Json, InitError](
+              destinationType, 
+              sanitizedJson, 
+              scalaz.NonEmptyList(errorString))))))
 
       slog <- liftF(Sync[F].delay(LoggerFactory(s"quasar.plugin.$debugId")))
 
-      dest <- EitherT(avalancheDestination(cfg, xa, pushPull, slog))
+      dest <- EitherT(avalancheDestination(cfg, acquireTransactor, pushPull, slog))
 
       _ <- liftF(Sync[F].delay(slog.info(s"Initialized $debugId: ${sanitizeDestinationConfig(config)}")))
     } yield dest
 
     init.value
   }
+
 }

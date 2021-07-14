@@ -40,7 +40,7 @@ import quasar.lib.jdbc.Slf4sLogHandler
 final class AvalancheHttpDestination[F[_]: MonadResourceErr: Sync: Timer](
     writeMode: WriteMode,
     baseUrl: Option[URI],
-    xa: Transactor[F],
+    acquireXa: F[Transactor[F]],
     pushPull: PushmiPullyu[F],
     logger: Logger)
     extends AvalancheDestination[F](logger) {
@@ -72,9 +72,10 @@ final class AvalancheHttpDestination[F[_]: MonadResourceErr: Sync: Timer](
           url0.getFragment)
       }
 
-      loadUris(tableName, columns, writeMode, NonEmptyList.one(url), Map(), logHandler)
-        .void
-        .transact(xa)
+      acquireXa.flatMap(xa =>
+        loadUris(tableName, columns, writeMode, NonEmptyList.one(url), Map(), logHandler)
+          .void
+          .transact(xa))
     }
 
     gzippedCsv.through(proxied)

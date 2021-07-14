@@ -42,8 +42,7 @@ final case class AvalancheAzureConfig(
     accountName: AccountName,
     containerName: ContainerName,
     connectionUri: URI,
-    username: Username,
-    password: ClusterPassword,
+    auth: AvalancheAuth,
     writeMode: WriteMode,
     azureCredentials: AzureCredentials.ActiveDirectory) {
 
@@ -54,8 +53,7 @@ final case class AvalancheAzureConfig(
           ClientId(Redacted),
           TenantId(Redacted),
           ClientSecret(Redacted)),
-      password =
-        ClusterPassword(Redacted))
+      auth = auth.sanitized)
 }
 
 object AvalancheAzureConfig {
@@ -82,29 +80,26 @@ object AvalancheAzureConfig {
 
   implicit def AvalancheAzureConfigCodecJson: CodecJson[AvalancheAzureConfig] =
     CodecJson({ (c: AvalancheAzureConfig) =>
-        ("accountName" := c.accountName.value) ->:
-        ("containerName" := c.containerName.value) ->:
-        ("connectionUri" := c.connectionUri) ->:
-        ("username" := c.username) ->:
-        ("clusterPassword" := c.password) ->:
-        ("writeMode" := c.writeMode) ->:
-        ("credentials" := c.azureCredentials) ->:
-        jEmptyObject,
+        (("accountName" := c.accountName.value) ->:
+          ("containerName" := c.containerName.value) ->:
+          ("connectionUri" := c.connectionUri) ->:
+          ("writeMode" := c.writeMode) ->:
+          ("credentials" := c.azureCredentials) ->:
+          jEmptyObject)
+          .deepmerge(c.auth.asJson)
       },
       (c => for {
          accountName <- (c --\ "accountName").as[String]
          containerName <- (c --\ "containerName").as[String]
          connectionUri <- (c --\ "connectionUri").as[URI]
-         username <- (c --\ "username").as[Username]
-         clusterPassword <- (c --\ "clusterPassword").as[ClusterPassword]
+         auth <- c.as[AvalancheAuth]
          writeMode <- (c --\ "writeMode").as[Option[WriteMode]]
          credentials <- (c --\ "credentials").as[AzureCredentials.ActiveDirectory]
        } yield AvalancheAzureConfig(
          AccountName(accountName),
          ContainerName(containerName),
          connectionUri,
-         username,
-         clusterPassword,
+         auth,
          writeMode.getOrElse(WriteMode.Replace),
          credentials)))
 }

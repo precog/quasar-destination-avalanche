@@ -23,6 +23,7 @@ import scala.util.matching.Regex
 import java.lang.{String, System}
 import java.net.URI
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -35,6 +36,8 @@ import quasar.connector.render.RenderConfig
 
 package object avalanche {
   type TableName = String
+
+  private[destination] val UUID0: UUID = new UUID(0L, 0L)
 
   val GranteeDbadminGrp: Fragment = Fragment.const("group dbadmingrp")
 

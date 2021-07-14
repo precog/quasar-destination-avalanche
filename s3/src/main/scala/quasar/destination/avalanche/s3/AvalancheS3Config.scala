@@ -37,20 +37,18 @@ final case class BucketConfig(
 final case class AvalancheS3Config(
     bucketConfig: BucketConfig,
     connectionUri: URI,
-    username: Username,
-    clusterPassword: ClusterPassword,
+    auth: AvalancheAuth,
     writeMode: WriteMode) {
 
   def sanitized: AvalancheS3Config =
     copy(
-      clusterPassword =
-        ClusterPassword(Redacted),
       bucketConfig =
         BucketConfig(
           bucketConfig.bucket,
           AccessKey(Redacted),
           SecretKey(Redacted),
-          Region(Redacted)))
+          Region(Redacted)),
+      auth = auth.sanitized)
 }
 
 object AvalancheS3Config {
@@ -69,7 +67,6 @@ object AvalancheS3Config {
     val decode: HCursor => DecodeResult[BucketConfig] = { root =>
       for {
         bucket <- (root --\ "bucket").as[String]
-
         creds = root --\ "credentials"
         accessKey <- (creds --\ "accessKey").as[String]
         secretKey <- (creds --\ "secretKey").as[String]
@@ -80,9 +77,23 @@ object AvalancheS3Config {
     CodecJson[BucketConfig](encode, decode)
   }
 
-  implicit def avalancheConfigCodecJson: CodecJson[AvalancheS3Config] =
-    casecodec5[BucketConfig, URI, Username, ClusterPassword, WriteMode, AvalancheS3Config](
-      AvalancheS3Config.apply,
-      AvalancheS3Config.unapply)(
-      "bucketConfig", "connectionUri", "username", "clusterPassword", "writeMode")
+  implicit def avalancheHttpConfigCodecJson: CodecJson[AvalancheS3Config] =
+    CodecJson({ (c: AvalancheS3Config) =>
+        (("bucketConfig" := c.bucketConfig) ->:
+          ("connectionUri" := c.connectionUri) ->:
+          ("writeMode" := c.writeMode) ->:
+          jEmptyObject)
+          .deepmerge(c.auth.asJson)
+      },
+      (c => for {
+         connectionUri <- (c --\ "connectionUri").as[URI]
+         auth <- c.as[AvalancheAuth]
+         writeMode <- (c --\ "writeMode").as[WriteMode]
+         bucketConfig <- (c --\ "bucketConfig").as[BucketConfig]
+       } yield AvalancheS3Config(
+         bucketConfig,
+         connectionUri,
+         auth,
+         writeMode)))
+
 }

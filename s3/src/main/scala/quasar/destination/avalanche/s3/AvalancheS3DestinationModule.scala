@@ -19,13 +19,11 @@ package quasar.destination.avalanche.s3
 import quasar.destination.avalanche._
 
 import scala.Int
-import scala.util.{Either, Right}
-
-import java.lang.String
+import scala.util.Either
 
 import argonaut._, Argonaut._
 
-import cats.data.{EitherT, NonEmptyList}
+import cats.data.EitherT
 import cats.effect.{
   Concurrent,
   ConcurrentEffect,
@@ -47,7 +45,6 @@ import quasar.blobstore.s3.{
 }
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.lib.jdbc.TransactorConfig
 
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
@@ -59,11 +56,10 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
   val destinationType: DestinationType =
     DestinationType("avalanche-s3", 1L)
 
-  def transactorConfig(config: AvalancheS3Config): Either[NonEmptyList[String], TransactorConfig] =
-    Right(AvalancheTransactorConfig(
+  def connectionConfig(config: AvalancheS3Config): AvalancheTransactorConfig = 
+    AvalancheTransactorConfig(
       config.connectionUri,
-      config.username,
-      config.clusterPassword))
+      config.auth)
 
   def sanitizeDestinationConfig(config: Json): Json =
     config.as[AvalancheS3Config].fold(
@@ -72,7 +68,7 @@ object AvalancheS3DestinationModule extends AvalancheDestinationModule[Avalanche
 
   def avalancheDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: AvalancheS3Config,
-      transactor: Transactor[F],
+      transactor: F[Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] = {
