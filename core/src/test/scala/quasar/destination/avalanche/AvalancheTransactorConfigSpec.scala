@@ -18,8 +18,6 @@ package quasar.destination.avalanche
 
 import quasar.lib.jdbc.JdbcDriverConfig
 import quasar.connector.Credentials
-// import quasar.destination.avalanche.AvalancheAuth.UsernamePassword
-// import quasar.destination.avalanche.AvalancheAuth.ExternalAuth
 
 import org.specs2.mutable.Specification
 
