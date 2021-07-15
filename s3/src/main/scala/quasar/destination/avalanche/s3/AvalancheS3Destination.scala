@@ -40,7 +40,7 @@ object AvalancheS3Destination {
       writeMode: WriteMode,
       putService: PutService[F],
       deleteService: DeleteService[F],
-      xa: Transactor[F],
+      acquireXa: F[Transactor[F]],
       logger: Logger)
       : Destination[F] = {
 
@@ -58,7 +58,7 @@ object AvalancheS3Destination {
       stagedUri,
       authParams,
       writeMode,
-      xa,
+      acquireXa,
       logger)
   }
 }

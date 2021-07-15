@@ -20,6 +20,7 @@ lazy val quasarPluginJdbcVersion =
   Def.setting[String](managedVersions.value("precog-quasar-lib-jdbc"))
 
 lazy val specs2Version = "4.9.4"
+lazy val http4sVersion = "0.21.24"
 
 lazy val buildSettings = Seq(
   logBuffered in Test := githubIsWorkflowBuild.value)
@@ -48,12 +49,16 @@ lazy val core = project
       "com.precog" %% "quasar-lib-jdbc" % quasarPluginJdbcVersion.value,
       "com.precog" %% "quasar-api" % quasarVersion.value,
       "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
+      "org.http4s" %% "http4s-argonaut" % http4sVersion,
+      "org.http4s" %% "http4s-ember-client" % http4sVersion,
       "org.specs2" %% "specs2-core" % specs2Version % Test),
     assemblyExcludedJars in assembly := {
       val cp = (fullClasspath in assembly).value
       cp.filter(_.data.getName != "iijdbc.jar") // exclude everything but iijdbc.jar
     },
-    packageBin in Compile := (assembly in Compile).value)
+    packageBin in Compile := (assembly in Compile).value,
+    addCompilerPlugin("com.github.ghik" % "silencer-plugin" % "1.6.0" cross CrossVersion.full),
+    scalacOptions += "-P:silencer:globalFilters=http4s-argonaut")
   .evictToLocal("QUASAR_PATH", "api", true)
   .evictToLocal("QUASAR_PATH", "connector", true)
 

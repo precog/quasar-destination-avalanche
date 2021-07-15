@@ -22,9 +22,13 @@ import java.net.URI
 
 import argonaut._, Argonaut._
 
+import org.http4s.syntax.literals._
+
 import org.specs2.mutable.Specification
 
 import quasar.blobstore.s3._
+
+import scala.StringContext
 
 object AvalancheS3ConfigSpec extends Specification {
   import WriteMode._
@@ -50,8 +54,7 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("myuser"),
-        ClusterPassword("mypassword"),
+        AvalancheAuth.UsernamePassword(Username("myuser"), ClusterPassword("mypassword")),
         Create)
 
     initialJson.as[AvalancheS3Config].result must beRight(cfg)
@@ -79,8 +82,7 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("dbuser"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("dbuser"), ClusterPassword("super secret")),
         Truncate)
 
     initialJson.as[AvalancheS3Config].result must beRight(cfg)
@@ -109,12 +111,44 @@ object AvalancheS3ConfigSpec extends Specification {
           SecretKey("aws-secret-key"),
           Region("us-east-1")),
         new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
-        Username("myuser"),
-        ClusterPassword("super secret"),
+        AvalancheAuth.UsernamePassword(Username("myuser"), ClusterPassword("super secret")),
         Truncate)
 
     initialJson.as[AvalancheS3Config].result must beRight(cfg)
 
     cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
   }
+
+
+  "avalanche-s3 parses and prints a valid config with external auth" >> {
+    val initialJson = Json.obj(
+      "bucketConfig" := Json.obj(
+        "bucket" := "bucket-name",
+        "credentials" := Json.obj(
+          "accessKey" := "aws-access-key",
+          "secretKey" := "aws-secret-key",
+          "region" := "us-east-1")),
+      "connectionUri" := "jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;",
+      "externalAuth" := Json.obj(
+        "authId" := "00000000-0000-0000-0000-000000000000",
+        "userinfoUri" := "https://potato.tomato.com/userinfo",
+        "userinfoUidField" := "email"),
+      "writeMode" := "truncate")
+
+    val cfg =
+      AvalancheS3Config(
+        BucketConfig(
+          Bucket("bucket-name"),
+          AccessKey("aws-access-key"),
+          SecretKey("aws-secret-key"),
+          Region("us-east-1")),
+        new URI("jdbc:ingres://cluster-id.azure.actiandatacloud.com:27839/db;encryption=on;"),
+        AvalancheAuth.ExternalAuth(UUID0, uri"https://potato.tomato.com/userinfo", "email"),
+        Truncate)
+
+    initialJson.as[AvalancheS3Config].result must beRight(cfg)
+
+    cfg.asJson.as[AvalancheS3Config].result must beRight(cfg)
+  }
+
 }
