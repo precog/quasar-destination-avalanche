@@ -20,7 +20,7 @@ lazy val quasarPluginJdbcVersion =
   Def.setting[String](managedVersions.value("precog-quasar-lib-jdbc"))
 
 lazy val specs2Version = "4.9.4"
-lazy val http4sVersion = "0.21.33"
+lazy val http4sVersion = "0.21.24"
 
 lazy val buildSettings = Seq(
   logBuffered in Test := githubIsWorkflowBuild.value)
