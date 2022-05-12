@@ -23,7 +23,7 @@ import argonaut.{Json => _, _}, Argonaut._
 final case class Username(asString: String)
 
 object Username {
-  val DbUser: Username = Username("dbuser")
+  val DbUser: Username = Username("")
 
   implicit val usernameDecodeJson: DecodeJson[Username] =
     json.decodeOrDefault(jdecode1(Username(_)), DbUser)
