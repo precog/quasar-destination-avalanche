@@ -34,9 +34,9 @@ object AvalancheTransactorConfigSpec extends Specification {
         Username("user"),
         Credentials.Token("token".getBytes(StandardCharsets.UTF_8)))
 
-      conf.driverConfig must beLike { 
-        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _) => 
-          uri.toString() must_=== 
+      conf.driverConfig must beLike {
+        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _, _) =>
+          uri.toString() must_===
             "jdbc:actian://potato.tomato.com:27839/db;encryption=on;auth_type=browser;UID=user;PWD=access_token=token"
       }
     }
@@ -49,9 +49,9 @@ object AvalancheTransactorConfigSpec extends Specification {
         Username("user"),
         Credentials.Token("token".getBytes(StandardCharsets.UTF_8)))
 
-      conf.driverConfig must beLike { 
-        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _) => 
-          uri.toString() must_=== 
+      conf.driverConfig must beLike {
+        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _, _) =>
+          uri.toString() must_===
             "jdbc:actian://potato.tomato.com:27839/db;encryption=on;auth_type=browser;UID=user;PWD=access_token=token"
       }
 
@@ -63,9 +63,9 @@ object AvalancheTransactorConfigSpec extends Specification {
         Username("user"),
         Credentials.Token("token".getBytes(StandardCharsets.UTF_8)))
 
-      conf.driverConfig must beLike { 
-        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _) => 
-          uri.toString() must_=== 
+      conf.driverConfig must beLike {
+        case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _, _) =>
+          uri.toString() must_===
             "jdbc:actian://potato.tomato.com:27839/db;encryption=on;auth_type=potato;UID=user;PWD=access_token=token"
       }
     }
@@ -77,9 +77,9 @@ object AvalancheTransactorConfigSpec extends Specification {
       Username("user"),
       ClusterPassword("password"))
 
-    conf.driverConfig must beLike { 
-      case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _) => 
-        uri.toString() must_=== 
+    conf.driverConfig must beLike {
+      case JdbcDriverConfig.JdbcDriverManagerConfig(uri, _, _) =>
+        uri.toString() must_===
           "jdbc:actian://potato.tomato.com:27839/db;encryption=on;UID=user;PWD=password"
     }
   }
